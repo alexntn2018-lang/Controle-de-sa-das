@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Base de Operações - Controle Unificado</title>
+    <!-- Carregando Tailwind CSS para estilização -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a1a; /* Fundo Escuro */
+            color: #d9c28e; /* Khaki/Tan */
+            min-height: 100vh;
+        }
+        /* Estilos da Landing Page */
+        #landing-page-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        /* Estilos para o container principal do APP */
+        .tactical-container {
+            background-color: #303030; /* Cinza Tático */
+            border: 2px solid #495641; /* Borda Verde Oliva */
+            box-shadow: 0 0 15px rgba(73, 86, 65, 0.5); /* Sombra suave para profundidade */
+        }
+        /* Estilos para input/selects */
+        input:focus, select:focus {
+            border-color: #d9c28e !important;
+            box-shadow: 0 0 0 1px #d9c28e !important;
+        }
+        input, select {
+            background-color: #444444;
+            color: #f0f0f0;
+            border: 1px solid #555;
+        }
+        
+        /* Estilos da Tabela */
+        th, td {
+            padding: 10px 14px;
+            text-align: left;
+            border-bottom: 1px solid #444444;
+        }
+        th {
+            background-color: #2b2b2b; /* Cabeçalho Escuro */
+            color: #d9c28e;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.1em;
+            font-weight: 700;
+        }
+        .data-row {
+            color: #f0f0f0;
+        }
+        .data-row:nth-child(even) {
+            background-color: #383838;
+        }
+        .data-row:hover {
+            background-color: #495641; /* Verde Oliva no hover */
+        }
+        /* Botões de Ação */
+        .action-button {
+            background-color: #495641; 
+            color: #f0f0f0;
+            font-weight: bold;
+        }
+        .action-button:hover {
+            background-color: #5d6e52; 
+        }
+
+    </style>
+    <!-- Importando Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, onSnapshot, collection, query, orderBy, serverTimestamp, setLogLevel, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- LÓGICA DE NAVEGAÇÃO INTERNA ---
+        // Função para mostrar a aplicação e esconder a página inicial
+        window.accessTerminal = function() {
+            document.getElementById('landing-page-container').classList.add('hidden');
+            document.getElementById('main-app-container').classList.remove('hidden');
+            // Inicializa a data no formulário para hoje
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('date').value = today;
+            document.getElementById('date-filter').value = today;
+        };
+
+        // --- LÓGICA DO FIREBASE E APLICAÇÃO ---
+
+        // Configurações e Variáveis Globais (Fornecidas pelo ambiente)
+        setLogLevel('Debug');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let app, db, auth;
+        let userId = null;
+        let isAuthReady = false;
+        let allDepartures = []; // Variável para armazenar todos os dados brutos do Firestore
+        
+        // Referências do DOM
+        const logTableBody = document.getElementById('log-table-body');
+        const summaryTableBody = document.getElementById('summary-table-body');
+        const dateFilterInput = document.getElementById('date-filter');
+        const materialInput = document.getElementById('material-name');
+        const formStatus = document.getElementById('form-status');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const userIdDisplay = document.getElementById('user-id-display');
+        const addDepartureForm = document.getElementById('add-departure-form'); 
+        const analysisOutput = document.getElementById('analysis-output'); // Novo: Output da análise AI
+        
+        // Sugestões de Materiais (Lista Completa do Usuário)
+        const materialSuggestions = [
+            "Cebola", "Batatas", "Abóbora", "Abobrinha", "Chuchu", "Cenoura", "Tomate", "Pimentão", "Cheiro verde", 
+            "Agrião", "Couve", "Loro", "Beterraba", "Aipim", "Batata doce", "Pepino", "Repolho", "Alface", "Quiabo", 
+            "Rúcula", "Alho", "Melancia", "Banana", "Limão", "Laranja", "Mamão", "Melão", "Abacaxi", "Maçã", 
+            "Tangerina", "Manga", "Manteiga", "Água mineral", "Água mineral com gás", "Refrigerante sabor guaraná", 
+            "Refrigerante sabor uva", "Refrigerante sabor cola", "Refrigerante coca cola", "Coca cola zero", "Ovo", 
+            "Requeijão nazza", "Salsicha", "Queijo", "Presunto", "Mortadela", "Bacon", "Linguiça", "Carne seca", 
+            "Massa de Pastel", "Ovo de codorna", "Cerveja império", "Cerveja Heineken", "Cerveja Stella", "Red bull", 
+            "Smirnoff ice", "Kovak", "Vinho Espumante", "Gin", "Monin", "Peixe", "Coxa e sobrecoxa", "Peito de frango", 
+            "Patinho", "Lagarto", "Lombo", "Miolo da pá", "Paleta sem músculo", "Coxão duro", "Fígado", "Coxão mole", 
+            "Coração alcatra", "Maminha da alcatra", "Acém", "Hambúrguer", "Batata frita", "Pão de queijo", 
+            "Garganta suína", "Máscara suína", "Joelho suíno", "Ponta de costela", "Kibe", "Bolinha de queijo", 
+            "Salgadinho de aipim", "Coxinha", "Risole de camarão", "Gelo", "Patinho cortado", "Charuto de carne moída", 
+            "Charuto de peito de frango", "Arroz branco", "Arroz parabolizado", "Macarrão", "Óleo", "Açúcar", 
+            "Feijão carioca", "Feijão preto", "Leite em pó", "Café", "Farinha de trigo", "Fubá", "Farinha de mandioca", 
+            "Farinha de rosca", "Xarope de guaraná", "Xarope de caju", "Ketchup sachê", "Mostarda sachê", "Maionese", 
+            "Ervilha", "Colorau", "Feijão Fradinho", "Sal fino", "Sal grosso", "Trigo Kibe", "Extrato de tomate", 
+            "Azeite de oliva", "Vinagre", "Óleo misto", "Molho de pimenta", "Azeitonas", "Batata palha", 
+            "Milho em conserva", "Ervilha em conserva", "Leite de coco", "Creme de leite", "Leite condensado", 
+            "Adoçante", "Canela em pó", "Fermento biológico", "Fermento químico", "Creme de Confeiteiro", 
+            "Suco em pó", "Amido de milho", "Gelatina", "Doce em pasta", "Achocolatado", "Mariola", "Amendoim", 
+            "Rosquinha Mabel", "Paçoca", "Geleia de mocotó", "Sequilhos", "Pit Stop", "AtivPlus", "Gatorade", 
+            "Biscoito Tucs", "Biscoito passatempo", "Guaracamp", "Biscoito amanteigado", "Amanteigado Goiabinha", 
+            "Barrinha de ração", "Rapadura"
+        ];
+
+        // Sugestões Comuns de Unidade de Medida
+        const unitSuggestions = ["UN", "KG", "L", "Saco", "Caixa", "Pç", "Pcte", "Fardo", "Balde", "Galao"];
+        
+        // Função para preencher as listas de sugestões (datalist)
+        function fillDatalists() {
+            const materialDatalist = document.getElementById('material-suggestions');
+            materialSuggestions.forEach(material => {
+                const option = document.createElement('option');
+                option.value = material;
+                materialDatalist.appendChild(option);
+            });
+
+            const unitDatalist = document.getElementById('unit-suggestions');
+            unitSuggestions.forEach(unit => {
+                const option = document.createElement('option');
+                option.value = unit;
+                unitDatalist.appendChild(option);
+            });
+        }
+
+        // --- 1. Inicialização do Firebase e Autenticação ---
+        if (Object.keys(firebaseConfig).length > 0) {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+        } else {
+            console.error("Firebase Configuração não encontrada.");
+        }
+
+        // Define a coleção pública para este aplicativo
+        const collectionPath = `artifacts/${appId}/public/data/daily_departures_v2`; // Nova coleção para v2
+
+        // Listener de autenticação
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+            } else {
+                if (initialAuthToken) {
+                    try {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                        userId = auth.currentUser.uid;
+                    } catch (error) {
+                        console.error("Erro ao autenticar com token customizado:", error);
+                        await signInAnonymously(auth);
+                        userId = auth.currentUser.uid;
+                    }
+                } else {
+                    await signInAnonymously(auth);
+                    userId = auth.currentUser.uid;
+                }
+            }
+            
+            userIdDisplay.textContent = `ID do Usuário: ${userId}`;
+            isAuthReady = true;
+            if (loadingIndicator) loadingIndicator.classList.add('hidden');
+            setupRealtimeListener();
+
+            if(addDepartureForm) {
+                addDepartureForm.addEventListener('submit', addDeparture);
+            }
+        });
+
+
+        // --- 2. Funcionalidade de Adicionar Saída ---
+        const addDeparture = async (event) => { 
+            event.preventDefault();
+            
+            if (!isAuthReady || !userId) {
+                formStatus.textContent = "Aguardando autenticação...";
+                return;
+            }
+
+            const material = materialInput.value.trim();
+            const quantity = parseFloat(document.getElementById('quantity').value.trim()); // Usar parseFloat para 1,5 etc.
+            const date = document.getElementById('date').value.trim();
+            const destination = document.getElementById('destination').value.trim(); // Novo campo
+            const unit = document.getElementById('unit_of_measure').value.trim(); // Novo campo
+
+            if (!material || isNaN(quantity) || quantity <= 0 || !date || !destination || !unit) {
+                formStatus.textContent = "ERRO: Preencha todos os campos obrigatórios corretamente.";
+                formStatus.classList.remove('text-green-500', 'text-gray-500', 'text-yellow-400');
+                formStatus.classList.add('text-red-500', 'font-bold');
+                return;
+            }
+
+            try {
+                await addDoc(collection(db, collectionPath), {
+                    material: material,
+                    quantity: quantity,
+                    date: date, 
+                    destination: destination, // Novo campo
+                    unit_of_measure: unit,   // Novo campo
+                    timestamp: serverTimestamp(),
+                    userId: userId 
+                });
+
+                formStatus.textContent = "Saída REGISTRADA: Operação concluída.";
+                formStatus.classList.remove('text-red-500', 'text-gray-500', 'text-yellow-400');
+                formStatus.classList.add('text-green-500', 'font-bold');
+                
+                // Limpar campos de entrada
+                document.getElementById('quantity').value = '';
+                materialInput.value = '';
+                document.getElementById('destination').value = '';
+                document.getElementById('unit_of_measure').value = '';
+                materialInput.focus();
+
+            } catch (e) {
+                console.error("Erro ao adicionar documento: ", e);
+                formStatus.textContent = "ERRO FATAL: Falha ao registrar a saída. Verifique o console.";
+                formStatus.classList.remove('text-green-500', 'text-gray-500', 'text-yellow-400');
+                formStatus.classList.add('text-red-500', 'font-bold');
+            }
+        };
+
+        // --- 3. Funcionalidade de Excluir Saída ---
+        const deleteDeparture = async (id, material) => { 
+            if (!isAuthReady) {
+                console.error("Autenticação não pronta.");
+                return;
+            }
+            
+            // Feedback temporário durante a exclusão
+            formStatus.textContent = `PROCESSANDO: Excluindo registro de ${material}...`;
+            formStatus.classList.remove('text-green-500', 'text-red-500');
+            formStatus.classList.add('text-yellow-400', 'font-bold');
+
+
+            try {
+                await deleteDoc(doc(db, collectionPath, id));
+                formStatus.textContent = `Saída de "${material}" EXCLUÍDA.`;
+                formStatus.classList.remove('text-red-500', 'text-yellow-400');
+                formStatus.classList.add('text-green-500', 'font-bold');
+                // O listener onSnapshot se encarrega de atualizar a UI
+            } catch (e) {
+                console.error("Erro ao excluir documento: ", e);
+                formStatus.textContent = "ERRO CRÍTICO: Falha na exclusão. Verifique o console.";
+                formStatus.classList.remove('text-green-500', 'text-yellow-400');
+                formStatus.classList.add('text-red-500', 'font-bold');
+            }
+        };
+        // Torna a função acessível no escopo global para o onclick
+        window.deleteDeparture = deleteDeparture;
+
+
+        // --- 4. Listener em Tempo Real (onSnapshot) ---
+        function setupRealtimeListener() {
+            if (!db) return;
+
+            const today = new Date().toISOString().split('T')[0];
+            if (!dateFilterInput.value) { 
+                dateFilterInput.value = today;
+            }
+            
+            const q = query(collection(db, collectionPath));
+            
+            onSnapshot(q, (querySnapshot) => {
+                if (!isAuthReady) return; 
+
+                const departures = [];
+                querySnapshot.forEach((doc) => {
+                    departures.push({ id: doc.id, ...doc.data() });
+                });
+                
+                allDepartures = departures;
+
+                const selectedDate = dateFilterInput.value;
+                renderData(allDepartures, selectedDate);
+            }, (error) => {
+                console.error("Erro ao ouvir dados:", error);
+            });
+        }
+        
+        // Listener para o filtro de data: Re-renderiza usando os dados em cache (allDepartures)
+        dateFilterInput.addEventListener('change', () => {
+             if(isAuthReady) {
+                const selectedDate = dateFilterInput.value;
+                renderData(allDepartures, selectedDate);
+             }
+        });
+
+        // --- 5. Renderização dos Dados e Resumo ---
+        function renderData(departures, selectedDate) {
+            logTableBody.innerHTML = '';
+            analysisOutput.innerHTML = ''; // Limpa o output da análise ao mudar a data.
+            
+            // 1. Filtrar as saídas pela data selecionada
+            const filteredDepartures = departures.filter(d => d.date === selectedDate);
+            
+            // 2. Renderizar o Log Completo
+            if (filteredDepartures.length === 0) {
+                // Colspan agora é 7 (colunas + Ações)
+                logTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-gray-500">Nenhuma saída registrada para ${selectedDate}.</td></tr>`; 
+            } else {
+                filteredDepartures
+                    .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))
+                    .forEach((item) => {
+                    const row = document.createElement('tr');
+                    row.classList.add('data-row');
+                    
+                    const time = item.timestamp?.toDate ? item.timestamp.toDate().toLocaleTimeString('pt-BR') : 'N/A';
+                    
+                    row.innerHTML = `
+                        <td class="text-sm text-[#d9c28e]">${time}</td>
+                        <td class="text-sm text-[#f0f0f0]">${item.material}</td>
+                        <td class="text-sm text-[#d9c28e]">${item.unit_of_measure || 'N/A'}</td>
+                        <td class="text-sm text-green-500 font-bold">${item.quantity}</td>
+                        <td class="text-sm text-[#f0f0f0]">${item.destination || 'N/A'}</td>
+                        <td class="text-sm text-gray-400">${item.userId.substring(0, 8)}...</td>
+                        <td class="text-sm text-gray-900">
+                            <!-- Botão de Excluir, passando o ID do documento e o material para feedback -->
+                            <button onclick="deleteDeparture('${item.id}', '${item.material}')" 
+                                    class="p-1 rounded-full text-red-500 hover:bg-red-900/50 transition duration-150 ease-in-out" 
+                                    title="EXCLUIR REGISTRO">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </td>
+                    `;
+                    logTableBody.appendChild(row);
+                });
+            }
+
+            // 3. Calcular e Renderizar o Resumo Diário
+            calculateSummary(filteredDepartures);
+        }
+
+        function calculateSummary(filteredDepartures) {
+            summaryTableBody.innerHTML = '';
+            const summary = {};
+
+            // Agrega as quantidades por Material E Unidade (Chave Única)
+            filteredDepartures.forEach(item => {
+                const key = `${item.material}|${item.unit_of_measure || 'UNID'}`;
+                if (summary[key]) {
+                    summary[key] += item.quantity;
+                } else {
+                    summary[key] = item.quantity;
+                }
+            });
+
+            const keys = Object.keys(summary).sort();
+
+            if (keys.length === 0) {
+                summaryTableBody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-gray-500">Nenhum resumo para esta data.</td></tr>`;
+                return;
+            }
+
+            // Renderiza a tabela de resumo
+            keys.forEach(key => {
+                const [material, unit] = key.split('|');
+                const row = document.createElement('tr');
+                row.classList.add('data-row');
+                row.innerHTML = `
+                    <td class="text-base font-semibold text-[#f0f0f0]">${material}</td>
+                    <td class="text-sm text-[#d9c28e]">${unit}</td>
+                    <td class="text-base font-extrabold text-green-500">${summary[key]}</td>
+                `;
+                summaryTableBody.appendChild(row);
+            });
+        }
+        
+        // --- 6. Funcionalidade de Análise Logística (Gemini API) ---
+        const generateAnalysis = async () => {
+            
+            // Check if there are any items in the summary table
+            if (summaryTableBody.children.length === 0 || summaryTableBody.children[0].colSpan === 3) {
+                analysisOutput.innerHTML = '<p class="text-red-500 font-bold">ERRO: Sem dados de consumo para analisar no dia selecionado.</p>';
+                return;
+            }
+
+            analysisOutput.innerHTML = '<p class="text-yellow-400 font-bold animate-pulse">PROCESSANDO: Gerando Relatório Tático (Gemini AI)...</p>';
+
+            // Collect data from the current summary table
+            let data = [];
+            for (const row of summaryTableBody.children) {
+                const material = row.children[0].textContent;
+                const unit = row.children[1].textContent;
+                const total = row.children[2].textContent;
+                data.push(`${material} (${unit}): ${total}`);
+            }
+
+            const userQuery = `Analise a seguinte lista de consumo diário do depósito e gere um breve relatório de status operacional para o Gerente de Logística. O relatório deve: 1. Ser conciso e profissional em português. 2. Destacar os 3 itens com o maior volume de consumo total. 3. Fornecer uma sugestão de ação breve (ex: 'Monitorar estoque' ou 'Revisar pedido'). Lista de Consumo: ${data.join('; ')}`;
+            const systemPrompt = "Você é um Analista Logístico Tático de IA. Sua resposta deve ser formatada como um 'STATUS REPORT' formal, usando vocabulário profissional em português. Mantenha o tom de urgência e eficiência. Use formatação Markdown (negrito e listas).";
+            
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "Falha ao gerar o texto de análise.";
+                
+                analysisOutput.innerHTML = `<div class="p-4 bg-[#2b2b2b] border border-[#495641] mt-4 text-sm whitespace-pre-wrap">${text}</div>`;
+
+            } catch (error) {
+                console.error("Erro na chamada da API Gemini:", error);
+                analysisOutput.innerHTML = '<p class="text-red-500 font-bold">ERRO FATAL DE COMUNICAÇÃO (GEMINI): Falha na API. Verifique a conexão.</p>';
+            }
+        };
+        window.generateAnalysis = generateAnalysis; // Make accessible globally
+
+
+        window.onload = fillDatalists;
+    </script>
+</head>
+<body>
+    
+    <!-- 1. PÁGINA INICIAL (LANDING PAGE) -->
+    <!-- Define que esta seção ocupa toda a altura da tela e está centralizada -->
+    <div id="landing-page-container" class="w-full h-screen flex justify-center items-center">
+        <div class="max-w-md w-full bg-[#303030] p-10 shadow-2xl border-4 border-[#495641] rounded-lg text-center">
+            <h1 class="text-3xl font-extrabold mb-4 border-b-2 border-[#495641] pb-2 text-[#d9c28e]">
+                BASE DE OPERAÇÕES LOGÍSTICAS
+            </h1>
+            <p class="text-gray-400 mb-8">
+                Sistema de Gerenciamento de Saídas de Materiais. Acesso Restrito.
+            </p>
+            
+            <!-- Botão que chama a função JavaScript para mudar de tela -->
+            <button onclick="accessTerminal()" 
+                class="inline-block w-full bg-[#495641] hover:bg-green-900 text-white font-bold py-3 px-6 rounded-md transition duration-200 uppercase tracking-widest border border-[#d9c28e]">
+                Acessar Terminal de Controle
+            </button>
+        </div>
+    </div>
+
+
+    <!-- 2. APLICATIVO PRINCIPAL (OCULTO INICIALMENTE) -->
+    <!-- 'hidden' garante que ele só aparece após clicar no botão da landing page -->
+    <div id="main-app-container" class="hidden p-4 sm:p-8 w-full">
+        <div class="max-w-4xl mx-auto">
+            <header class="mb-8">
+                <h1 class="text-3xl font-extrabold text-[#d9c28e] mb-2 border-b-2 border-[#495641] pb-2">
+                    TERMINAL DE REGISTRO DE SAÍDAS
+                </h1>
+                <p class="text-gray-400">STATUS: ONLINE | LOCAL: DEPÓSITO | ID: <span id="user-id-display" class="font-mono text-xs text-[#d9c28e]"></span></p>
+            </header>
+
+            <!-- Seção de Cadastro de Saída -->
+            <div class="p-6 mb-8 tactical-container">
+                <h2 class="text-xl font-semibold text-[#d9c28e] mb-4 border-b border-gray-600 pb-2">
+                    ACESSO DE INFORMAÇÃO (REGISTRO)
+                </h2>
+                
+                <div id="loading-indicator" class="text-center p-4 text-yellow-400">Carregando autenticação... Aguarde.</div>
+
+                <form id="add-departure-form" class="space-y-4"> 
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <!-- Campo Data -->
+                        <div>
+                            <label for="date" class="block text-sm font-medium text-[#d9c28e]">DATA DA OPERAÇÃO</label>
+                            <input type="date" id="date" required 
+                                class="mt-1 block w-full rounded-none shadow-sm focus:ring-1 p-2 border">
+                        </div>
+                        
+                        <!-- Campo Destino -->
+                        <div class="md:col-span-1">
+                            <label for="destination" class="block text-sm font-medium text-[#d9c28e]">DESTINO (UNIDADE)</label>
+                            <input type="text" id="destination" required placeholder="Ex: COZINHA PRINCIPAL"
+                                class="mt-1 block w-full rounded-none shadow-sm focus:ring-1 p-2 border">
+                        </div>
+
+                        <!-- Campo Material -->
+                        <div class="md:col-span-2">
+                            <label for="material-name" class="block text-sm font-medium text-[#d9c28e]">CÓDIGO DO MATERIAL</label>
+                            <input type="text" id="material-name" list="material-suggestions" required placeholder="Digite o material"
+                                class="mt-1 block w-full rounded-none shadow-sm focus:ring-1 p-2 border uppercase">
+                            <datalist id="material-suggestions"></datalist>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Campo Unidade -->
+                        <div>
+                            <label for="unit_of_measure" class="block text-sm font-medium text-[#d9c28e]">UNIDADE (KG, UN, L, PÇ)</label>
+                            <input type="text" id="unit_of_measure" list="unit-suggestions" required placeholder="EX: KG"
+                                class="mt-1 block w-full rounded-none shadow-sm focus:ring-1 p-2 border uppercase">
+                            <datalist id="unit-suggestions"></datalist>
+                        </div>
+                        
+                        <!-- Campo Quantidade -->
+                        <div>
+                            <label for="quantity" class="block text-sm font-medium text-[#d9c28e]">QUANTIDADE SAÍDA</label>
+                            <input type="number" id="quantity" step="0.01" required min="0.01" placeholder="Ex: 1.5 ou 10"
+                                class="mt-1 block w-full rounded-none shadow-sm focus:ring-1 p-2 border">
+                        </div>
+                    </div>
+
+
+                    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-2">
+                        <button type="submit"
+                                class="w-full sm:w-auto action-button hover:text-white font-bold py-2 px-6 rounded-none transition duration-150 ease-in-out border border-[#d9c28e]">
+                            EXECUTAR REGISTRO (ENVIAR)
+                        </button>
+                        <p id="form-status" class="text-sm mt-3 sm:mt-0 sm:ml-4 text-gray-500 font-bold"></p>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Seção de Filtro e Resumo/Log -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                <!-- Tabela de Resumo Diário (Total por Material) -->
+                <div class="p-6 tactical-container">
+                    <h2 class="text-xl font-semibold text-green-500 mb-4 border-b border-gray-600 pb-2">
+                        RELATÓRIO DE CONSUMO DIÁRIO
+                    </h2>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-[#444444] rounded-none overflow-hidden">
+                            <thead>
+                                <tr>
+                                    <th class="bg-[#495641]">MATERIAL</th>
+                                    <th class="bg-[#495641]">UNID.</th>
+                                    <th class="bg-[#495641]">TOTAL</th>
+                                </tr>
+                            </thead>
+                            <tbody id="summary-table-body" class="bg-[#303030] divide-y divide-[#444444]">
+                                <!-- Dados do Resumo serão injetados aqui -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Seção de Análise Logística (AI) -->
+                    <div class="mt-6 border-t border-gray-600 pt-4">
+                        <button onclick="generateAnalysis()"
+                                class="action-button hover:bg-green-700 text-sm font-bold py-2 px-4 rounded-md transition duration-150 ease-in-out">
+                            GERAR RELATÓRIO TÁTICO (AI) ✨
+                        </button>
+                        <div id="analysis-output" class="mt-4 text-[#d9c28e]">
+                            <!-- O relatório AI será exibido aqui -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Log de Saídas (Detalhe do Dia) -->
+                <div class="p-6 tactical-container">
+                    <h2 class="text-xl font-semibold text-[#d9c28e] mb-4 border-b border-gray-600 pb-2">
+                        LOG DE TRANSAÇÕES DO DIA
+                    </h2>
+                    
+                    <div class="mb-4">
+                        <label for="date-filter" class="block text-sm font-medium text-[#d9c28e]">SELECIONAR DATA DE REFERÊNCIA:</label>
+                        <input type="date" id="date-filter"
+                            class="mt-1 block w-full rounded-none shadow-sm focus:ring-1 p-2 border">
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-[#444444] rounded-none overflow-hidden">
+                            <thead>
+                                <tr>
+                                    <th class="bg-[#3b3b3b]">HORA</th>
+                                    <th class="bg-[#3b3b3b]">MATERIAL</th>
+                                    <th class="bg-[#3b3b3b]">UNID.</th>
+                                    <th class="bg-[#3b3b3b]">QTD.</th>
+                                    <th class="bg-[#3b3b3b]">DESTINO</th>
+                                    <th class="bg-[#3b3b3b]">POR</th>
+                                    <th class="bg-[#3b3b3b]">AÇÕES</th>
+                                </tr>
+                            </thead>
+                            <tbody id="log-table-body" class="bg-[#303030] divide-y divide-[#444444]">
+                                <!-- Dados do Log serão injetados aqui -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</body>
+</html>
