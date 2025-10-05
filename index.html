@@ -16,8 +16,8 @@
             color: #d9c28e; /* Khaki/Tan */
             min-height: 100vh;
         }
-        /* Estilos da Landing Page */
-        #landing-page-container {
+        /* Estilos da Tela de Autenticação */
+        #auth-container {
             display: flex;
             justify-content: center;
             align-items: center;
@@ -72,13 +72,15 @@
         .action-button:hover {
             background-color: #5d6e52; 
         }
-        #firebase-error {
+        #firebase-error, #auth-status {
             display: none;
-            background-color: #ff3333;
-            color: white;
             padding: 1rem;
             text-align: center;
             font-weight: bold;
+        }
+        #firebase-error {
+            background-color: #ff3333;
+            color: white;
             position: fixed;
             top: 0;
             left: 0;
@@ -90,17 +92,15 @@
     <!-- Importando Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, addDoc, onSnapshot, collection, query, serverTimestamp, setLogLevel, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- LÓGICA DE NAVEGAÇÃO INTERNA ---
-        window.accessTerminal = function() {
-            document.getElementById('landing-page-container').classList.add('hidden');
-            document.getElementById('main-app-container').classList.remove('hidden');
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('date').value = today;
-            document.getElementById('date-filter').value = today;
-        };
+        // --- LÓGICA DE NAVEGAÇÃO INTERNA (Login/Cadastro) ---
+        function toggleAuthForms() {
+            document.getElementById('login-form-container').classList.toggle('hidden');
+            document.getElementById('register-form-container').classList.toggle('hidden');
+        }
+        window.toggleAuthForms = toggleAuthForms;
 
         // --- PASSO IMPORTANTE: CONFIGURAÇÃO DO FIREBASE ---
         const firebaseConfig = {
@@ -134,6 +134,7 @@
         const analysisOutput = document.getElementById('analysis-output');
         const batchUploadStatus = document.getElementById('batch-upload-status');
         const firebaseErrorDiv = document.getElementById('firebase-error');
+        const authStatus = document.getElementById('auth-status');
 
         // Validação da configuração do Firebase
         if (!firebaseConfig || !firebaseConfig.projectId || firebaseConfig.projectId === "SEU_PROJETO_ID") {
@@ -147,32 +148,92 @@
         }
 
         const collectionPath = `saidas_materiais`;
+        
+        // --- LÓGICA DE AUTENTICAÇÃO ---
+        const handleRegister = (e) => {
+            e.preventDefault();
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+            
+            authStatus.style.display = 'block';
+            authStatus.textContent = "Registrando...";
+            authStatus.className = 'text-yellow-400 font-bold p-2 text-center';
+
+            createUserWithEmailAndPassword(auth, email, password)
+                .then((userCredential) => {
+                    authStatus.textContent = "Usuário registrado com sucesso! Faça o login.";
+                    authStatus.className = 'text-green-500 font-bold p-2 text-center';
+                    setTimeout(() => toggleAuthForms(), 1500);
+                })
+                .catch((error) => {
+                    const errorCode = error.code;
+                    let message = "Ocorreu um erro ao registrar.";
+                    if (errorCode === 'auth/email-already-in-use') {
+                        message = "Este e-mail já está em uso.";
+                    } else if (errorCode === 'auth/weak-password') {
+                        message = "A senha deve ter pelo menos 6 caracteres.";
+                    } else if (errorCode === 'auth/invalid-email') {
+                        message = "O formato do e-mail é inválido.";
+                    }
+                    console.error("Erro de registro:", error);
+                    authStatus.textContent = `Erro: ${message}`;
+                    authStatus.className = 'text-red-500 font-bold p-2 text-center';
+                });
+        };
+
+        const handleLogin = (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            
+            authStatus.style.display = 'block';
+            authStatus.textContent = "Autenticando...";
+            authStatus.className = 'text-yellow-400 font-bold p-2 text-center';
+
+            signInWithEmailAndPassword(auth, email, password)
+                .catch((error) => {
+                    console.error("Erro de login:", error);
+                    authStatus.textContent = "Erro: E-mail ou senha inválidos.";
+                    authStatus.className = 'text-red-500 font-bold p-2 text-center';
+                });
+        };
+
+        const handleLogout = () => {
+            signOut(auth);
+        };
 
         if (auth) {
-            onAuthStateChanged(auth, async (user) => {
+            onAuthStateChanged(auth, (user) => {
+                loadingIndicator.style.display = 'none';
                 if (user) {
+                    // Usuário está logado
                     userId = user.uid;
-                } else {
-                    try {
-                        await signInAnonymously(auth);
-                        userId = auth.currentUser.uid;
-                    } catch (error) {
-                        console.error("Erro ao fazer login anônimo:", error);
-                        firebaseErrorDiv.textContent = "ERRO: Falha na autenticação anônima. Verifique as regras de segurança do Firebase.";
-                        firebaseErrorDiv.style.display = 'block';
-                    }
-                }
-                
-                userIdDisplay.textContent = `ID do Usuário: ${userId}`;
-                isAuthReady = true;
-                if (loadingIndicator) loadingIndicator.classList.add('hidden');
-                setupRealtimeListener();
+                    isAuthReady = true;
+                    userIdDisplay.textContent = `Usuário: ${user.email}`;
 
-                if(addDepartureForm) {
-                    addDepartureForm.addEventListener('submit', addDeparture);
+                    document.getElementById('auth-container').classList.add('hidden');
+                    document.getElementById('main-app-container').classList.remove('hidden');
+                    
+                    const today = new Date().toISOString().split('T')[0];
+                    document.getElementById('date').value = today;
+                    document.getElementById('date-filter').value = today;
+                    
+                    setupRealtimeListener();
+                } else {
+                    // Usuário está deslogado
+                    userId = null;
+                    isAuthReady = false;
+                    document.getElementById('auth-container').classList.remove('hidden');
+                    document.getElementById('main-app-container').classList.add('hidden');
                 }
             });
         }
+        // Adicionando listeners aos forms e botões de auth
+        document.getElementById('login-form').addEventListener('submit', handleLogin);
+        document.getElementById('register-form').addEventListener('submit', handleRegister);
+        document.getElementById('logout-button').addEventListener('click', handleLogout);
+        
+        // --- RESTANTE DA LÓGICA DA APLICAÇÃO ---
 
         const addDeparture = async (event) => { 
             event.preventDefault();
@@ -190,6 +251,7 @@
             document.getElementById('unit_of_measure').value = '';
             materialInput.focus();
         };
+        addDepartureForm.addEventListener('submit', addDeparture);
 
         async function registerDeparture(material, quantity, date, destination, unit) {
             if (!isAuthReady || !userId) {
@@ -211,7 +273,8 @@
                     destination: destination.toUpperCase(),
                     unit_of_measure: unit.toUpperCase(),
                     timestamp: serverTimestamp(),
-                    userId: userId 
+                    userId: userId,
+                    userEmail: auth.currentUser.email
                 });
                 formStatus.textContent = `Saída de "${material}" REGISTRADA.`;
                 formStatus.classList.remove('text-red-500', 'text-gray-500', 'text-yellow-400');
@@ -252,10 +315,6 @@
 
         function setupRealtimeListener() {
             if (!db) return;
-            const today = new Date().toISOString().split('T')[0];
-            if (!dateFilterInput.value) { 
-                dateFilterInput.value = today;
-            }
             const q = query(collection(db, collectionPath));
             onSnapshot(q, (querySnapshot) => {
                 if (!isAuthReady) return; 
@@ -300,7 +359,7 @@
                         <td class="text-sm text-[#d9c28e]">${item.unit_of_measure || 'N/A'}</td>
                         <td class="text-sm text-green-500 font-bold">${item.quantity}</td>
                         <td class="text-sm text-[#f0f0f0]">${item.destination || 'N/A'}</td>
-                        <td class="text-sm text-gray-400">${item.userId.substring(0, 8)}...</td>
+                        <td class="text-sm text-gray-400">${item.userEmail ? item.userEmail.split('@')[0] : item.userId.substring(0,8)}</td>
                         <td>
                             <button onclick="deleteDeparture('${item.id}', '${item.material}')" class="p-1 rounded-full text-red-500 hover:bg-red-900/50 transition duration-150 ease-in-out" title="EXCLUIR REGISTRO">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
@@ -389,19 +448,13 @@
                     continue; 
                 }
 
-                // Lógica de parsing robusta (da direita para a esquerda)
                 const destination = parts.length > 3 ? parts.pop() : 'COZINHA';
                 let quantityStr = parts.pop();
                 const unit = parts.pop();
                 const material = parts.join(' ');
-
-                // Tratamento de casos especiais de quantidade
-                if (quantityStr.includes('/')) {
-                    quantityStr = quantityStr.split('/')[0].trim();
-                }
-                if (quantityStr.includes('½')) {
-                    quantityStr = "0.5";
-                }
+                
+                if (quantityStr.includes('/')) quantityStr = quantityStr.split('/')[0].trim();
+                if (quantityStr.includes('½')) quantityStr = "0.5";
                 
                 const quantity = parseFloat(quantityStr.replace(',', '.'));
 
@@ -412,9 +465,8 @@
                 }
 
                 const success = await registerDeparture(material, quantity, dateForBatch, destination, unit);
-                if (success) {
-                    successCount++;
-                } else {
+                if (success) successCount++;
+                else {
                     errorCount++;
                     errorLines.push(index + 1);
                 }
@@ -425,7 +477,7 @@
                 summaryMessage += `<p class="text-red-500 font-bold">${errorCount} linhas com formato inválido foram ignoradas. Verifique as linhas: ${errorLines.join(', ')}</p>`;
             }
             if (successCount === 0 && errorCount === 0) {
-                 summaryMessage = `<p class="text-yellow-400 font-bold">Nenhum dado válido para importação foi encontrado no arquivo. Verifique se o formato está correto (Material Unidade Quantidade Destino).</p>`;
+                 summaryMessage = `<p class="text-yellow-400 font-bold">Nenhum dado válido para importação foi encontrado no arquivo.</p>`;
             }
 
             batchUploadStatus.innerHTML = summaryMessage;
@@ -436,44 +488,35 @@
             const file = fileInput.files[0];
             const dateForBatch = document.getElementById('date').value;
 
-            if (!file) {
-                batchUploadStatus.innerHTML = '<p class="text-red-500 font-bold">ERRO: Nenhum arquivo selecionado.</p>';
+            if (!file || !dateForBatch) {
+                batchUploadStatus.innerHTML = `<p class="text-red-500 font-bold">ERRO: Selecione um arquivo e preencha a data da operação.</p>`;
                 return;
             }
-            if (!dateForBatch) {
-                batchUploadStatus.innerHTML = '<p class="text-red-500 font-bold">ERRO: A data da operação no formulário acima deve ser preenchida.</p>';
-                return;
-            }
-
-            batchUploadStatus.innerHTML = '<p class="text-yellow-400 font-bold animate-pulse">PROCESSANDO ARQUIVO: Lendo e extraindo dados...</p>';
             
+            batchUploadStatus.innerHTML = '<p class="text-yellow-400 font-bold animate-pulse">PROCESSANDO ARQUIVO...</p>';
             const reader = new FileReader();
 
             if (file.name.endsWith('.docx')) {
                 reader.onload = async (event) => {
-                    const arrayBuffer = event.target.result;
                     try {
-                        const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                        const result = await mammoth.extractRawText({ arrayBuffer: event.target.result });
                         await processTextData(result.value, dateForBatch);
                     } catch (err) {
-                        console.error("Erro ao processar o arquivo .docx:", err);
-                        batchUploadStatus.innerHTML = '<p class="text-red-500 font-bold">ERRO FATAL: Falha ao ler o arquivo .docx. Verifique se é um arquivo válido.</p>';
+                        batchUploadStatus.innerHTML = '<p class="text-red-500 font-bold">ERRO: Falha ao ler o arquivo .docx.</p>';
                     }
                 };
                 reader.readAsArrayBuffer(file);
             } else if (file.name.endsWith('.txt')) {
                 reader.onload = async (event) => {
                     try {
-                        const text = event.target.result;
-                        await processTextData(text, dateForBatch);
+                        await processTextData(event.target.result, dateForBatch);
                     } catch (err) {
-                        console.error("Erro ao processar o arquivo .txt:", err);
-                        batchUploadStatus.innerHTML = '<p class="text-red-500 font-bold">ERRO FATAL: Falha ao ler o arquivo .txt.</p>';
+                        batchUploadStatus.innerHTML = '<p class="text-red-500 font-bold">ERRO: Falha ao ler o arquivo .txt.</p>';
                     }
                 };
                 reader.readAsText(file);
             } else {
-                 batchUploadStatus.innerHTML = '<p class="text-red-500 font-bold">ERRO: Tipo de arquivo não suportado. Use .docx ou .txt.</p>';
+                 batchUploadStatus.innerHTML = '<p class="text-red-500 font-bold">ERRO: Tipo de arquivo não suportado.</p>';
             }
         };
         window.handleFileUpload = handleFileUpload;
@@ -502,29 +545,63 @@
 <body>
     
     <div id="firebase-error"></div>
+    <div id="loading-indicator" class="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
+        <p class="text-yellow-400 font-bold text-lg">Carregando Sistema...</p>
+    </div>
 
-    <div id="landing-page-container" class="w-full h-screen flex justify-center items-center">
-        <div class="max-w-md w-full bg-[#303030] p-10 shadow-2xl border-4 border-[#495641] rounded-lg text-center">
-            <h1 class="text-3xl font-extrabold mb-4 border-b-2 border-[#495641] pb-2 text-[#d9c28e]">
-                BASE DE OPERAÇÕES LOGÍSTICAS
-            </h1>
-            <p class="text-gray-400 mb-8">
-                Sistema de Gerenciamento de Saídas de Materiais. Acesso Restrito.
-            </p>
-            <button onclick="accessTerminal()" 
-                class="inline-block w-full bg-[#495641] hover:bg-green-900 text-white font-bold py-3 px-6 rounded-md transition duration-200 uppercase tracking-widest border border-[#d9c28e]">
-                Acessar Terminal de Controle
-            </button>
+    <div id="auth-container" class="">
+        <div class="max-w-md w-full bg-[#303030] p-10 shadow-2xl border-4 border-[#495641] rounded-lg">
+            <!-- Container do Login (visível por padrão) -->
+            <div id="login-form-container">
+                <h1 class="text-3xl font-extrabold mb-4 border-b-2 border-[#495641] pb-2 text-center text-[#d9c28e]">LOGIN</h1>
+                <form id="login-form" class="space-y-4">
+                    <div>
+                        <label for="login-email" class="block text-sm font-medium text-[#d9c28e]">Email</label>
+                        <input type="email" id="login-email" required class="mt-1 block w-full rounded-none shadow-sm focus:ring-1 p-2 border">
+                    </div>
+                    <div>
+                        <label for="login-password" class="block text-sm font-medium text-[#d9c28e]">Senha</label>
+                        <input type="password" id="login-password" required class="mt-1 block w-full rounded-none shadow-sm focus:ring-1 p-2 border">
+                    </div>
+                    <button type="submit" class="w-full action-button py-2 px-6 rounded-none border border-[#d9c28e]">Entrar</button>
+                </form>
+                <p class="mt-4 text-center text-sm">
+                    Não tem uma conta? <button onclick="toggleAuthForms()" class="font-semibold text-[#d9c28e] hover:underline">Cadastre-se</button>
+                </p>
+            </div>
+            <!-- Container do Cadastro (oculto por padrão) -->
+            <div id="register-form-container" class="hidden">
+                <h1 class="text-3xl font-extrabold mb-4 border-b-2 border-[#495641] pb-2 text-center text-[#d9c28e]">CADASTRO</h1>
+                <form id="register-form" class="space-y-4">
+                    <div>
+                        <label for="register-email" class="block text-sm font-medium text-[#d9c28e]">Email</label>
+                        <input type="email" id="register-email" required class="mt-1 block w-full rounded-none shadow-sm focus:ring-1 p-2 border">
+                    </div>
+                    <div>
+                        <label for="register-password" class="block text-sm font-medium text-[#d9c28e]">Senha (mínimo 6 caracteres)</label>
+                        <input type="password" id="register-password" required class="mt-1 block w-full rounded-none shadow-sm focus:ring-1 p-2 border">
+                    </div>
+                    <button type="submit" class="w-full action-button py-2 px-6 rounded-none border border-[#d9c28e]">Registrar</button>
+                </form>
+                <p class="mt-4 text-center text-sm">
+                    Já tem uma conta? <button onclick="toggleAuthForms()" class="font-semibold text-[#d9c28e] hover:underline">Faça o login</button>
+                </p>
+            </div>
+            <div id="auth-status" class="mt-4"></div>
         </div>
     </div>
 
+
     <div id="main-app-container" class="hidden p-4 sm:p-8 w-full">
         <div class="max-w-4xl mx-auto">
-            <header class="mb-8">
-                <h1 class="text-3xl font-extrabold text-[#d9c28e] mb-2 border-b-2 border-[#495641] pb-2">
-                    TERMINAL DE REGISTRO DE SAÍDAS
-                </h1>
-                <p class="text-gray-400">STATUS: ONLINE | LOCAL: DEPÓSITO | ID: <span id="user-id-display" class="font-mono text-xs text-[#d9c28e]"></span></p>
+            <header class="mb-8 flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-extrabold text-[#d9c28e] mb-2 border-b-2 border-[#495641] pb-2">
+                        TERMINAL DE REGISTRO
+                    </h1>
+                    <p id="user-id-display" class="text-xs sm:text-sm text-gray-400 font-mono"></p>
+                </div>
+                <button id="logout-button" class="action-button text-xs sm:text-sm font-bold py-2 px-4 rounded-md transition duration-150">Sair</button>
             </header>
 
             <!-- Seção de Cadastro de Saída -->
@@ -532,9 +609,6 @@
                 <h2 class="text-xl font-semibold text-[#d9c28e] mb-4 border-b border-gray-600 pb-2">
                     REGISTRO MANUAL
                 </h2>
-                
-                <div id="loading-indicator" class="text-center p-4 text-yellow-400">Carregando autenticação... Aguarde.</div>
-
                 <form id="add-departure-form" class="space-y-4"> 
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div>
@@ -543,7 +617,7 @@
                         </div>
                         <div class="md:col-span-1">
                             <label for="destination" class="block text-sm font-medium text-[#d9c28e]">DESTINO (UNIDADE)</label>
-                            <input type="text" id="destination" required placeholder="Ex: COZINHA PRINCIPAL" class="mt-1 block w-full rounded-none shadow-sm focus:ring-1 p-2 border">
+                            <input type="text" id="destination" required placeholder="Ex: COZINHA" class="mt-1 block w-full rounded-none shadow-sm focus:ring-1 p-2 border">
                         </div>
                         <div class="md:col-span-2">
                             <label for="material-name" class="block text-sm font-medium text-[#d9c28e]">CÓDIGO DO MATERIAL</label>
@@ -551,10 +625,9 @@
                             <datalist id="material-suggestions"></datalist>
                         </div>
                     </div>
-
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label for="unit_of_measure" class="block text-sm font-medium text-[#d9c28e]">UNIDADE (KG, UN, L, PÇ)</label>
+                            <label for="unit_of_measure" class="block text-sm font-medium text-[#d9c28e]">UNIDADE (KG, UN, L)</label>
                             <input type="text" id="unit_of_measure" list="unit-suggestions" required placeholder="EX: KG" class="mt-1 block w-full rounded-none shadow-sm focus:ring-1 p-2 border uppercase">
                             <datalist id="unit-suggestions"></datalist>
                         </div>
@@ -563,7 +636,6 @@
                             <input type="number" id="quantity" step="0.01" required min="0.01" placeholder="Ex: 1.5 ou 10" class="mt-1 block w-full rounded-none shadow-sm focus:ring-1 p-2 border">
                         </div>
                     </div>
-
                     <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-2">
                         <button type="submit" class="w-full sm:w-auto action-button hover:text-white font-bold py-2 px-6 rounded-none transition duration-150 ease-in-out border border-[#d9c28e]">
                             EXECUTAR REGISTRO
@@ -573,24 +645,16 @@
                 </form>
             </div>
 
-            <!-- NOVA SEÇÃO: REGISTRO EM LOTE VIA ARQUIVO WORD -->
+            <!-- Seção de Registro em Lote -->
             <div class="p-6 mb-8 tactical-container">
                 <h2 class="text-xl font-semibold text-[#d9c28e] mb-4 border-b border-gray-600 pb-2">
                     REGISTRO EM LOTE (VIA ARQUIVO)
                 </h2>
                 <div class="bg-gray-800/50 p-4 border border-dashed border-gray-600 mb-4 text-sm">
                     <h3 class="font-bold text-yellow-400">INSTRUÇÕES DE FORMATAÇÃO:</h3>
-                    <p class="mt-2 text-gray-300">Crie um arquivo Word (.docx) ou Bloco de Notas (.txt) com as colunas na seguinte ordem. O separador (espaço ou tab) será detectado automaticamente.</p>
-                    <code class="block bg-black/50 p-2 mt-2 font-mono text-xs">
-                        NOME DO MATERIAL  UNIDADE  QUANTIDADE  DESTINO
-                    </code>
-                    <p class="mt-2 font-bold text-gray-300">Exemplo:</p>
-                    <pre class="block bg-black/50 p-2 mt-1 font-mono text-xs text-green-400"><code>Cebola KG 1.5 COZINHA
-Biscoito Tucs Pacote 10 DEPÓSITO 2
-Arroz Kg 60</code></pre>
-                    <p class="mt-2 text-gray-400"><strong>IMPORTANTE:</strong> A data para todos os registros será a que estiver selecionada no campo "DATA DA OPERAÇÃO" acima.</p>
+                    <p class="mt-2 text-gray-300">Crie um arquivo (.docx ou .txt) com as colunas na ordem: <code class="bg-black/50 p-1 font-mono text-xs">MATERIAL UNIDADE QUANTIDADE DESTINO</code></p>
+                    <p class="mt-2 text-gray-400"><strong>IMPORTANTE:</strong> A data será a que estiver no campo "DATA DA OPERAÇÃO" acima.</p>
                 </div>
-
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
                     <div>
                         <label for="word-file-input" class="block text-sm font-medium text-[#d9c28e] mb-1">ARQUIVO DE DADOS (.DOCX, .TXT)</label>
@@ -605,70 +669,43 @@ Arroz Kg 60</code></pre>
                  <div id="batch-upload-status" class="mt-4 text-sm font-bold"></div>
             </div>
 
-
             <!-- Seção de Filtro e Resumo/Log -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                
                 <div class="p-6 tactical-container">
                     <h2 class="text-xl font-semibold text-green-500 mb-4 border-b border-gray-600 pb-2">
                         RELATÓRIO DE CONSUMO DIÁRIO
                     </h2>
-                    
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-[#444444] rounded-none overflow-hidden">
-                            <thead>
-                                <tr>
-                                    <th class="bg-[#495641]">MATERIAL</th>
-                                    <th class="bg-[#495641]">UNID.</th>
-                                    <th class="bg-[#495641]">TOTAL</th>
-                                </tr>
-                            </thead>
-                            <tbody id="summary-table-body" class="bg-[#303030] divide-y divide-[#444444]">
-                            </tbody>
+                            <thead><tr><th class="bg-[#495641]">MATERIAL</th><th class="bg-[#495641]">UNID.</th><th class="bg-[#495641]">TOTAL</th></tr></thead>
+                            <tbody id="summary-table-body" class="bg-[#303030] divide-y divide-[#444444]"></tbody>
                         </table>
                     </div>
-
                     <div class="mt-6 border-t border-gray-600 pt-4">
                         <button onclick="generateAnalysis()" class="action-button hover:bg-green-700 text-sm font-bold py-2 px-4 rounded-md transition duration-150 ease-in-out">
                             GERAR RELATÓRIO TÁTICO (AI) ✨
                         </button>
-                        <div id="analysis-output" class="mt-4 text-[#d9c28e]">
-                        </div>
+                        <div id="analysis-output" class="mt-4 text-[#d9c28e]"></div>
                     </div>
                 </div>
-
                 <div class="p-6 tactical-container">
                     <h2 class="text-xl font-semibold text-[#d9c28e] mb-4 border-b border-gray-600 pb-2">
                         LOG DE TRANSAÇÕES DO DIA
                     </h2>
-                    
                     <div class="mb-4">
                         <label for="date-filter" class="block text-sm font-medium text-[#d9c28e]">SELECIONAR DATA DE REFERÊNCIA:</label>
                         <input type="date" id="date-filter" class="mt-1 block w-full rounded-none shadow-sm focus:ring-1 p-2 border">
                     </div>
-
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-[#444444] rounded-none overflow-hidden">
-                            <thead>
-                                <tr>
-                                    <th class="bg-[#3b3b3b]">HORA</th>
-                                    <th class="bg-[#3b3b3b]">MATERIAL</th>
-                                    <th class="bg-[#3b3b3b]">UNID.</th>
-                                    <th class="bg-[#3b3b3b]">QTD.</th>
-                                    <th class="bg-[#3b3b3b]">DESTINO</th>
-                                    <th class="bg-[#3b3b3b]">POR</th>
-                                    <th class="bg-[#3b3b3b]">AÇÕES</th>
-                                </tr>
-                            </thead>
-                            <tbody id="log-table-body" class="bg-[#303030] divide-y divide-[#444444]">
-                            </tbody>
+                            <thead><tr><th class="bg-[#3b3b3b]">HORA</th><th class="bg-[#3b3b3b]">MATERIAL</th><th class="bg-[#3b3b3b]">UNID.</th><th class="bg-[#3b3b3b]">QTD.</th><th class="bg-[#3b3b3b]">DESTINO</th><th class="bg-[#3b3b3b]">POR</th><th class="bg-[#3b3b3b]">AÇÕES</th></tr></thead>
+                            <tbody id="log-table-body" class="bg-[#303030] divide-y divide-[#444444]"></tbody>
                         </table>
                     </div>
                 </div>
             </div>
-
         </div>
     </div>
-
 </body>
 </html>
+
