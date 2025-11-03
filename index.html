@@ -3,452 +3,845 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Controle Diário de Saída de Materiais</title>
+    <title>Controle de Estoque - Acesso Unificado</title>
     <!-- Carregando Tailwind CSS para estilização -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Mammoth.js para ler arquivos .docx -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <!-- Fonte Padrão do Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        /* Estilização Base com o Novo Tema Casual */
+        html {
+            scroll-behavior: smooth;
+        }
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f7f7f7;
+            font-family: 'Roboto', sans-serif;
+            background-color: #f3f4f6; /* Fundo Cinza Claro (Tailwind gray-100) */
+            color: #1f2937; /* Texto Escuro Principal (Tailwind gray-800) */
+            min-height: 100vh;
         }
-        /* Estilos para a tabela */
-        th, td {
-            padding: 12px 16px;
-            text-align: left;
+        
+        /* Tela de Autenticação Limpa e Moderna */
+        #auth-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #e5e7eb; /* Cinza um pouco mais escuro (Tailwind gray-200) */
         }
+        #auth-card {
+            background-color: white;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border-radius: 1rem; /* Cantos bem arredondados */
+        }
+
+        /* Estilos dos Containers Principais */
+        .content-container {
+            background-color: white;
+            border: 1px solid #e5e7eb; /* Borda Cinza Clara (Tailwind gray-200) */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border-radius: 0.75rem; /* Cantos arredondados */
+        }
+        
+        /* Inputs e Selects Modernizados */
+        input:focus, select:focus {
+            border-color: #3b82f6 !important; /* Azul Primário */
+            box-shadow: 0 0 0 1px #3b82f6 !important;
+            outline: none;
+        }
+        input, select {
+            background-color: #f9fafb; /* Cinza bem claro (Tailwind gray-50) */
+            color: #1f2937;
+            border: 1px solid #d1d5db; /* Cinza (Tailwind gray-300) */
+            border-radius: 0.5rem; /* Cantos arredondados */
+        }
+        
+        /* Tabelas com Novo Design Limpo */
         th {
-            background-color: #3f51b5;
-            color: white;
+            background-color: #f9fafb; /* Cinza bem claro */
+            color: #4b5563; /* Texto cinza escuro */
             text-transform: uppercase;
             font-size: 0.75rem;
             letter-spacing: 0.05em;
+            font-weight: 600;
+            padding: 12px 16px;
+            text-align: left;
+        }
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e5e7eb; /* Cinza claro */
         }
         .data-row:nth-child(even) {
-            background-color: #e8eaf6;
+            background-color: #f9fafb; /* Fundo alternado sutil */
         }
         .data-row:hover {
-            background-color: #c5cae9;
+            background-color: #dbeafe; /* Azul bem claro no hover */
         }
-        .container-shadow {
+        
+        /* Botões com o Novo Tema */
+        .action-button {
+            background-color: #3b82f6; /* Azul Primário */
+            color: white;
+            font-weight: 500;
+            border: none;
+            border-radius: 0.5rem;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        }
+        .action-button:hover {
+            background-color: #2563eb; /* Azul mais escuro */
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .secondary-button {
+            background-color: transparent;
+            border: 1px solid #d1d5db; /* Borda cinza */
+            color: #374151; /* Texto cinza escuro */
+        }
+        .secondary-button:hover {
+            background-color: #f9fafb;
+            border-color: #9ca3af;
+        }
+        
+        .dashboard-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border: 1px solid #e5e7eb;
+        }
+        .dashboard-card:hover {
+            transform: translateY(-5px);
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border-color: #3b82f6; /* Borda azul no hover */
         }
     </style>
     <!-- Importando Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, addDoc, onSnapshot, collection, query, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, onSnapshot, collection, query, serverTimestamp, setLogLevel, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Variáveis globais do ambiente Canvas
-        setLogLevel('Debug');
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        const canvasFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        // --- LÓGICA DE NAVEGAÇÃO INTERNA (Login/Cadastro) ---
+        function toggleAuthForms() {
+            document.getElementById('login-form-container').classList.toggle('hidden');
+            document.getElementById('register-form-container').classList.toggle('hidden');
+        }
+        window.toggleAuthForms = toggleAuthForms;
 
-        // 🚨 PASSO CRÍTICO PARA USO EXTERNO (GitHub Pages, etc.) 🚨
-        // Suas chaves do Firebase foram inseridas abaixo.
-        const userFirebaseConfig = {
+        // --- PASSO IMPORTANTE: CONFIGURAÇÃO DO FIREBASE ---
+        const firebaseConfig = {
             apiKey: "AIzaSyAd6tEf3dBDohA1TCgLn-w4UW1UKE_90tE",
             authDomain: "meu-controle-de-estoque-3344f.firebaseapp.com",
             projectId: "meu-controle-de-estoque-3344f",
-            storageBucket: "meu-controle-de-estoque-3344f.firebasestorage.app",
+            storageBucket: "meu-controle-de-estoque-3344f.appspot.com",
             messagingSenderId: "524659153893",
-            appId: "1:524659153893:web:118326d46946ee60306d0c"
+            appId: "1:524659153893:web:118326d46946ee60306d0c",
+            measurementId: "G-BD19J1CTCZ"
         };
-        // -------------------------------------------------------------
+        // ----------------------------------------------------
 
-        let firebaseConfig = {};
+        // --- LÓGICA DO FIREBASE E APLICAÇÃO ---
+        setLogLevel('Debug');
         
-        const IS_USING_PLACEHOLDERS = userFirebaseConfig.projectId === "APENAS_COLE_SUA_CHAVE_AQUI";
-
-        // Determinar qual configuração usar
-        if (Object.keys(canvasFirebaseConfig).length > 0) {
-            // 1. Usar a configuração do Canvas se estiver disponível
-            firebaseConfig = canvasFirebaseConfig;
-        } else if (!IS_USING_PLACEHOLDERS) {
-            // 2. Usar a configuração manual se o usuário a preencheu
-            firebaseConfig = userFirebaseConfig;
-            console.log("Usando configuração manual do Firebase.");
-        } else {
-            // 3. Configuração ausente: Bloquear a execução.
-            const errorMsg = "ERRO: Configuração do Firebase ausente. Por favor, edite o código e preencha suas chaves.";
-            console.error(errorMsg);
-            document.body.innerHTML = `<div class='p-8 text-center text-red-600 font-semibold'>${errorMsg}</div>`;
-            // return; // Linha que causava SyntaxError: removida e substituída por bloco condicional abaixo
-        }
-
         let app, db, auth;
         let userId = null;
         let isAuthReady = false;
-        let allDepartures = []; 
-
-        // Define a coleção para este aplicativo.
-        // Se estiver rodando fora do Canvas (Sem a config Canvas), usa-se 'daily_departures_data' na raiz.
-        const collectionPath = (Object.keys(canvasFirebaseConfig).length > 0) ? 
-            `artifacts/${appId}/public/data/daily_departures` : 
-            'daily_departures_data';
+        let allDepartures = [];
+        let unsubscribe; // Para o listener do snapshot
         
         // Referências do DOM
         const logTableBody = document.getElementById('log-table-body');
         const summaryTableBody = document.getElementById('summary-table-body');
+        const weeklySummaryTableBody = document.getElementById('weekly-summary-table-body');
+        const monthlySummaryTableBody = document.getElementById('monthly-summary-table-body');
         const dateFilterInput = document.getElementById('date-filter');
+        const weekMonthFilterInput = document.getElementById('week-month-filter');
+        const weekNumberFilterInput = document.getElementById('week-number-filter');
+        const monthFilterInput = document.getElementById('month-filter');
         const materialInput = document.getElementById('material-name');
         const formStatus = document.getElementById('form-status');
         const loadingIndicator = document.getElementById('loading-indicator');
         const userIdDisplay = document.getElementById('user-id-display');
         const addDepartureForm = document.getElementById('add-departure-form'); 
-        const externalConfigWarning = document.getElementById('external-config-warning');
+        const analysisOutput = document.getElementById('analysis-output');
+        const topMonthOutput = document.getElementById('top-month-output');
+        const batchUploadStatus = document.getElementById('batch-upload-status');
+        const authStatus = document.getElementById('auth-status');
+        const dashboardContainer = document.getElementById('dashboard-container');
+        const registroContainer = document.getElementById('registro-container');
+        const relatoriosContainer = document.getElementById('relatorios-container');
+        const semanalContainer = document.getElementById('semanal-container');
+        const mensalContainer = document.getElementById('mensal-container');
 
-        // Material List Suggestions (Based on user's previous context)
-        const materialSuggestions = [
-            "Cebola", "Batatas", "Abóbora", "Tomate", "Pimentão", "Cheiro verde", "Beterraba", 
-            "Pepino", "Repolho", "Alho", "Melancia", "Limão", "Laranja", "Mamão", "Melão", "Maçã",
-            "Água mineral", "Refrigerante sabor guaraná", "Refrigerante sabor uva", "Ovo", 
-            "Salsicha", "Queijo", "Presunto", "Mortadela", "Peixe", "Peito de frango", "Patinho",
-            "Arroz branco", "Macarrão", "Óleo", "Açúcar", "Feijão carioca", "Café", "Farinha de trigo", 
-            "Ketchup sachê", "Mostarda sachê", "Maionese", "Sal fino", "Extrato de tomate", "Creme de leite",
-            "Leite condensado", "Achocolatado"
-        ];
-        
-        // Função para preencher a lista de sugestões (datalist)
-        function fillMaterialDatalist() {
-            const datalist = document.getElementById('material-suggestions');
-            if (datalist) {
-                materialSuggestions.forEach(material => {
-                    const option = document.createElement('option');
-                    option.value = material;
-                    datalist.appendChild(option);
-                });
-            }
+        // --- LÓGICA DE NAVEGAÇÃO PÓS-LOGIN ---
+        function showDashboard() {
+            [dashboardContainer].forEach(c => c.classList.remove('hidden'));
+            [registroContainer, relatoriosContainer, semanalContainer, mensalContainer].forEach(c => c.classList.add('hidden'));
         }
+        window.showDashboard = showDashboard;
+        function showRegistro() {
+            [registroContainer].forEach(c => c.classList.remove('hidden'));
+            [dashboardContainer, relatoriosContainer, semanalContainer, mensalContainer].forEach(c => c.classList.add('hidden'));
+        }
+        window.showRegistro = showRegistro;
+        function showRelatorios() {
+            [relatoriosContainer].forEach(c => c.classList.remove('hidden'));
+            [dashboardContainer, registroContainer, semanalContainer, mensalContainer].forEach(c => c.classList.add('hidden'));
+        }
+        window.showRelatorios = showRelatorios;
+        function showSemanal() {
+            [semanalContainer].forEach(c => c.classList.remove('hidden'));
+            [dashboardContainer, registroContainer, relatoriosContainer, mensalContainer].forEach(c => c.classList.add('hidden'));
+        }
+        window.showSemanal = showSemanal;
+        function showMensal() {
+            [mensalContainer].forEach(c => c.classList.remove('hidden'));
+            [dashboardContainer, registroContainer, relatoriosContainer, semanalContainer].forEach(c => c.classList.add('hidden'));
+        }
+        window.showMensal = showMensal;
 
-        // --- 1. Inicialização do Firebase e Autenticação ---
-        
-        // Novo bloco condicional que só inicializa o Firebase se a configuração for válida.
-        if (!IS_USING_PLACEHOLDERS || Object.keys(canvasFirebaseConfig).length > 0) {
-            
+        // Validação da configuração do Firebase
+        if (!firebaseConfig || !firebaseConfig.projectId || firebaseConfig.projectId === "SEU_PROJETO_ID") {
+            console.error("CONFIGURAÇÃO DO FIREBASE INCOMPLETA!");
+            const firebaseErrorDiv = document.getElementById('firebase-error');
+            firebaseErrorDiv.textContent = "ERRO: A configuração do Firebase está faltando.";
+            firebaseErrorDiv.style.display = 'block';
+        } else {
             app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
+        }
+
+        const collectionPath = `saidas_materiais`;
+        
+        // --- LÓGICA DE AUTENTICAÇÃO ---
+        const handleRegister = (e) => {
+            e.preventDefault();
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+            authStatus.style.display = 'block';
+            authStatus.textContent = "Registrando...";
+            authStatus.className = 'text-center text-sm text-gray-500 mt-4';
+            createUserWithEmailAndPassword(auth, email, password)
+                .then(() => {
+                    authStatus.textContent = "Usuário registrado com sucesso! Faça o login.";
+                    authStatus.className = 'text-center text-sm text-green-600 mt-4';
+                    setTimeout(() => toggleAuthForms(), 1500);
+                })
+                .catch((error) => {
+                    let msg = "Ocorreu um erro ao registrar.";
+                    if (error.code === 'auth/email-already-in-use') msg = "Este e-mail já está em uso.";
+                    else if (error.code === 'auth/weak-password') msg = "A senha deve ter pelo menos 6 caracteres.";
+                    authStatus.textContent = `Erro: ${msg}`;
+                    authStatus.className = 'text-center text-sm text-red-600 mt-4';
+                });
+        };
+        const handleLogin = (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            authStatus.style.display = 'block';
+            authStatus.textContent = "Autenticando...";
+            authStatus.className = 'text-center text-sm text-gray-500 mt-4';
+            signInWithEmailAndPassword(auth, email, password)
+                .then(() => authStatus.style.display = 'none')
+                .catch(() => {
+                    authStatus.textContent = "Erro: E-mail ou senha inválidos.";
+                    authStatus.className = 'text-center text-sm text-red-600 mt-4';
+                });
+        };
+        const handleLogout = () => {
+            if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+            signOut(auth);
+        };
+        
+        // --- FUNÇÕES DE DATA ---
+        function getWeekOfMonthDateRange(yearMonth, weekNumber) {
+            const [year, month] = yearMonth.split('-').map(Number);
+            const weekNum = parseInt(weekNumber, 10);
             
-            // Se estiver usando a configuração manual, exibe um aviso (apenas se a configuração for preenchida)
-            if (externalConfigWarning && !Object.keys(canvasFirebaseConfig).length && !IS_USING_PLACEHOLDERS) {
-                externalConfigWarning.classList.remove('hidden');
+            let startDay, endDay;
+            if (weekNum === 1) {
+                startDay = 1;
+                endDay = 7;
+            } else if (weekNum === 2) {
+                startDay = 8;
+                endDay = 14;
+            } else if (weekNum === 3) {
+                startDay = 15;
+                endDay = 21;
+            } else { // weekNum é 4
+                startDay = 22;
+                endDay = new Date(year, month, 0).getDate(); // Último dia do mês
             }
 
+            const startDate = new Date(year, month - 1, startDay);
+            const endDate = new Date(year, month - 1, endDay);
+            
+            return {
+                start: startDate.toISOString().split('T')[0],
+                end: endDate.toISOString().split('T')[0]
+            };
+        }
+        
+        function populateMonthSelectors() {
+            const months = [];
+            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+            let d = new Date();
+            for (let i=0; i < 12; i++) {
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const year = d.getFullYear();
+                months.push({ value: `${year}-${month}`, text: `${monthNames[d.getMonth()]} de ${year}` });
+                d.setMonth(d.getMonth() - 1);
+            }
+            weekMonthFilterInput.innerHTML = months.map(m => `<option value="${m.value}">${m.text}</option>`).join('');
+            if(monthFilterInput) {
+                monthFilterInput.value = months[0].value;
+            }
+        }
 
-            // Listener de autenticação
-            onAuthStateChanged(auth, async (user) => {
+        if (auth) {
+            onAuthStateChanged(auth, (user) => {
+                loadingIndicator.style.display = 'none';
                 if (user) {
                     userId = user.uid;
+                    isAuthReady = true;
+                    userIdDisplay.textContent = `${user.email}`;
+                    document.getElementById('auth-container').classList.add('hidden');
+                    document.getElementById('main-app-container').classList.remove('hidden');
+                    showDashboard();
+                    window.scrollTo(0, 0);
+                    const today = new Date();
+                    document.getElementById('date').value = today.toISOString().split('T')[0];
+                    document.getElementById('date-filter').value = today.toISOString().split('T')[0];
+                    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+                    monthFilterInput.value = currentMonth;
+                    populateMonthSelectors();
+                    weekMonthFilterInput.value = currentMonth;
+                    if (!unsubscribe) setupRealtimeListener();
                 } else {
-                    // Tenta autenticar anonimamente, que é o modo de operação para este app simples.
-                    try {
-                        // O signInWithCustomToken é relevante apenas dentro do Canvas, mas mantido por segurança.
-                        if (initialAuthToken && Object.keys(canvasFirebaseConfig).length > 0) {
-                            await signInWithCustomToken(auth, initialAuthToken);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                        userId = auth.currentUser.uid;
-                    } catch (error) {
-                        console.error("Erro fatal de autenticação (verifique as regras do Auth/Firestore):", error);
-                        // O erro de autenticação pode ser causado por regras de segurança do Auth.
-                    }
-                }
-                
-                if (userIdDisplay) {
-                    if (userId) {
-                        userIdDisplay.textContent = `ID do Usuário: ${userId}`;
-                    } else {
-                        userIdDisplay.textContent = `Falha ao autenticar.`;
-                    }
-                }
-                
-                isAuthReady = true;
-                if(loadingIndicator) loadingIndicator.classList.add('hidden');
-                setupRealtimeListener();
-
-                // Adiciona o listener do formulário após a autenticação
-                if(addDepartureForm) {
-                    addDepartureForm.addEventListener('submit', addDeparture);
+                    userId = null; isAuthReady = false;
+                    document.getElementById('auth-container').classList.remove('hidden');
+                    document.getElementById('main-app-container').classList.add('hidden');
                 }
             });
         }
-
-
-        // --- 2. Funcionalidade de Adicionar Saída ---
-        const addDeparture = async (event) => { 
-            event.preventDefault();
-            
-            if (!isAuthReady || !userId) {
-                formStatus.textContent = "Aguardando autenticação...";
-                return;
+        document.getElementById('login-form').addEventListener('submit', handleLogin);
+        document.getElementById('register-form').addEventListener('submit', handleRegister);
+        document.getElementById('logout-button').addEventListener('click', handleLogout);
+        
+        // --- LÓGICA PRINCIPAL DA APLICAÇÃO ---
+        async function registerDeparture(material, quantity, date, destination, unit) {
+            if (!isAuthReady) return false;
+            if (!material || isNaN(quantity) || quantity <= 0 || !date || !destination || !unit) {
+                formStatus.textContent = `ERRO: Preencha todos os campos corretamente.`;
+                formStatus.className = 'text-sm mt-3 sm:mt-0 sm:ml-4 font-semibold text-red-600';
+                return false;
             }
-
-            const material = materialInput.value.trim();
-            // Garante que a conversão para número seja robusta
-            const quantity = parseFloat(document.getElementById('quantity').value.trim().replace(',', '.')); 
-            const date = document.getElementById('date').value.trim();
-
-            if (!material || isNaN(quantity) || quantity <= 0 || !date) {
-                formStatus.textContent = "Por favor, preencha todos os campos corretamente (Qtd. deve ser um número).";
-                formStatus.classList.remove('text-green-600');
-                formStatus.classList.add('text-red-600');
-                return;
-            }
-
             try {
-                // Adiciona o documento à coleção
                 await addDoc(collection(db, collectionPath), {
-                    material: material,
-                    quantity: quantity,
-                    date: date, // Data formatada como YYYY-MM-DD
-                    timestamp: serverTimestamp(),
-                    userId: userId 
+                    material: material.toUpperCase(), quantity, date, 
+                    destination: destination.toUpperCase(), unit_of_measure: unit.toUpperCase(),
+                    timestamp: serverTimestamp(), userId, userEmail: auth.currentUser.email
                 });
-
-                formStatus.textContent = "Saída registrada com sucesso!";
-                formStatus.classList.remove('text-red-600');
-                formStatus.classList.add('text-green-600');
-                
-                // Limpar o formulário (mantém a data e o material para registro rápido)
-                document.getElementById('quantity').value = '';
-                materialInput.value = '';
-                materialInput.focus();
-
+                formStatus.textContent = `Saída de "${material}" registrada.`;
+                formStatus.className = 'text-sm mt-3 sm:mt-0 sm:ml-4 font-semibold text-green-600';
+                return true;
             } catch (e) {
-                console.error("Erro ao adicionar documento: ", e);
-                // Mensagem de erro explícita sobre a causa mais provável: Regras de Segurança.
-                formStatus.textContent = "Erro ao registrar. 🛑 Verifique as Regras de Segurança do Firestore no console do Firebase.";
-                formStatus.classList.remove('text-green-600');
-                formStatus.classList.add('text-red-600');
+                formStatus.textContent = "ERRO: Falha ao registrar.";
+                formStatus.className = 'text-sm mt-3 sm:mt-0 sm:ml-4 font-semibold text-red-600';
+                return false;
+            }
+        }
+        const addDeparture = async (e) => { 
+            e.preventDefault();
+            const form = e.target;
+            await registerDeparture(
+                form.elements['material-name'].value.trim(),
+                parseFloat(form.elements['quantity'].value.trim()),
+                form.elements['date'].value.trim(),
+                form.elements['destination'].value.trim(),
+                form.elements['unit_of_measure'].value.trim()
+            );
+            form.reset();
+            document.getElementById('date').value = new Date().toISOString().split('T')[0];
+            form.elements['material-name'].focus();
+        };
+        addDepartureForm.addEventListener('submit', addDeparture);
+
+        const deleteDeparture = async (id, material) => { 
+            if (!isAuthReady) return;
+            if (confirm(`Tem certeza que deseja excluir o registro de "${material}"?`)) {
+                try {
+                    await deleteDoc(doc(db, collectionPath, id));
+                } catch (e) {
+                    alert("ERRO: Falha na exclusão.");
+                }
             }
         };
+        window.deleteDeparture = deleteDeparture;
 
-        // --- 3. Listener em Tempo Real (onSnapshot) ---
         function setupRealtimeListener() {
             if (!db) return;
-
-            // Define a data atual como filtro padrão
-            const today = new Date().toISOString().split('T')[0];
-            if (dateFilterInput && !dateFilterInput.value) { 
-                dateFilterInput.value = today;
-            }
-            
             const q = query(collection(db, collectionPath));
-            
-            onSnapshot(q, (querySnapshot) => {
+            unsubscribe = onSnapshot(q, (querySnapshot) => {
                 if (!isAuthReady) return; 
-
-                const departures = [];
-                querySnapshot.forEach((doc) => {
-                    departures.push({ id: doc.id, ...doc.data() });
-                });
-                
-                // Armazena os dados brutos
-                allDepartures = departures;
-
-                // Renderiza com base na data selecionada
-                const selectedDate = dateFilterInput.value;
-                renderData(allDepartures, selectedDate);
+                allDepartures = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderData(dateFilterInput.value);
+                renderWeeklySummary();
+                renderMonthlySummary();
+                calculateTopMonth();
             }, (error) => {
-                console.error("Erro ao ouvir dados:", error);
-                // Mensagem de erro explícita sobre a causa mais provável: Regras de Segurança.
-                if(logTableBody) logTableBody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-red-600 font-semibold">ERRO: Falha ao carregar dados. Verifique as Regras de Segurança do Firestore!</td></tr>`;
-                if(summaryTableBody) summaryTableBody.innerHTML = `<tr><td colspan="2" class="text-center py-4 text-red-600 font-semibold">ERRO: Falha ao carregar dados.</td></tr>`;
+                const firebaseErrorDiv = document.getElementById('firebase-error');
+                firebaseErrorDiv.textContent = "ERRO DE LEITURA: Verifique as Regras de Segurança do Firestore.";
+                firebaseErrorDiv.style.display = 'block';
             });
         }
         
-        // Listener para o filtro de data: Re-renderiza usando os dados em cache (allDepartures)
-        if(dateFilterInput) {
-            dateFilterInput.addEventListener('change', () => {
-                if(isAuthReady) {
-                    const selectedDate = dateFilterInput.value;
-                    renderData(allDepartures, selectedDate);
-                }
-            });
-        }
+        dateFilterInput.addEventListener('change', () => isAuthReady && renderData(dateFilterInput.value));
+        weekMonthFilterInput.addEventListener('change', () => isAuthReady && renderWeeklySummary());
+        weekNumberFilterInput.addEventListener('change', () => isAuthReady && renderWeeklySummary());
+        monthFilterInput.addEventListener('input', () => isAuthReady && renderMonthlySummary());
 
-        // --- 4. Renderização dos Dados e Resumo ---
-        function renderData(departures, selectedDate) {
-            if(logTableBody) logTableBody.innerHTML = '';
-            
-            // 1. Filtrar as saídas pela data selecionada
-            const filteredDepartures = departures.filter(d => d.date === selectedDate);
-            
-            // 2. Renderizar o Log Completo
-            if (filteredDepartures.length === 0) {
-                if(logTableBody) logTableBody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-gray-500">Nenhuma saída registrada para ${selectedDate}.</td></tr>`;
+        function renderData(selectedDate) {
+            logTableBody.innerHTML = '';
+            analysisOutput.innerHTML = '';
+            const filtered = allDepartures.filter(d => d.date === selectedDate);
+            if (filtered.length === 0) {
+                logTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-gray-500">Nenhuma saída registrada para ${selectedDate}.</td></tr>`; 
             } else {
-                filteredDepartures
-                    // Sort by timestamp (descending) to show newest first
-                    .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))
-                    .forEach((item) => {
-                    const row = document.createElement('tr');
-                    row.classList.add('data-row');
-                    
+                logTableBody.innerHTML = filtered.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))
+                .map((item) => {
                     const time = item.timestamp?.toDate ? item.timestamp.toDate().toLocaleTimeString('pt-BR') : 'N/A';
-                    // Use toFixed(2) para garantir que a quantidade seja exibida com duas casas decimais, se necessário.
-                    const quantityDisplay = (typeof item.quantity === 'number') ? item.quantity.toFixed(2) : item.quantity;
-
-                    row.innerHTML = `
-                        <td class="text-sm text-gray-900">${time}</td>
-                        <td class="text-sm text-gray-900">${item.material}</td>
-                        <td class"text-sm text-gray-900 font-bold">${quantityDisplay}</td>
-                        <td class="text-sm text-gray-500">${item.userId ? item.userId.substring(0, 8) + '...' : 'N/A'}</td>
-                    `;
-                    if(logTableBody) logTableBody.appendChild(row);
-                });
+                    return `<tr class="data-row">
+                            <td class="text-sm text-gray-600">${time}</td>
+                            <td class="text-sm font-medium text-gray-900">${item.material}</td>
+                            <td class="text-sm text-gray-500">${item.unit_of_measure || 'N/A'}</td>
+                            <td class="text-sm text-blue-600 font-semibold">${item.quantity}</td>
+                            <td class="text-sm text-gray-500">${item.destination || 'N/A'}</td>
+                            <td class="text-sm text-gray-500">${item.userEmail ? item.userEmail.split('@')[0] : ''}</td>
+                            <td><button onclick="deleteDeparture('${item.id}', '${item.material}')" class="p-1 rounded-full text-red-500 hover:bg-red-100" title="Excluir"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg></button></td>
+                        </tr>`;
+                }).join('');
             }
-
-            // 3. Calcular e Renderizar o Resumo Diário
-            calculateSummary(filteredDepartures);
+            calculateSummary(filtered, summaryTableBody);
         }
-
-        function calculateSummary(filteredDepartures) {
-            if(summaryTableBody) summaryTableBody.innerHTML = '';
-            const summary = {};
-
-            // Agrega as quantidades por material
-            filteredDepartures.forEach(item => {
-                if (summary[item.material]) {
-                    summary[item.material] += item.quantity;
-                } else {
-                    summary[item.material] = item.quantity;
-                }
-            });
-
-            const materials = Object.keys(summary).sort();
-
-            if (materials.length === 0) {
-                if(summaryTableBody) summaryTableBody.innerHTML = `<tr><td colspan="2" class="text-center py-4 text-gray-500">Nenhum resumo para esta data.</td></tr>`;
+        
+        function renderWeeklySummary() {
+            const yearMonth = weekMonthFilterInput.value;
+            const weekNumber = weekNumberFilterInput.value;
+            if (!yearMonth || !weekNumber) return;
+            const dateRange = getWeekOfMonthDateRange(yearMonth, weekNumber);
+            const filtered = allDepartures.filter(d => d.date >= dateRange.start && d.date <= dateRange.end);
+            calculateSummary(filtered, weeklySummaryTableBody);
+        }
+        
+        function renderMonthlySummary() {
+            const yearMonth = monthFilterInput.value;
+            if (!yearMonth) return;
+            const filtered = allDepartures.filter(d => d.date && d.date.startsWith(yearMonth));
+            calculateSummary(filtered, monthlySummaryTableBody);
+        }
+        
+        function calculateTopMonth() {
+            if (allDepartures.length === 0) {
+                topMonthOutput.innerHTML = '<p class="text-gray-500">Nenhum dado para analisar.</p>';
                 return;
             }
-
-            // Renderiza a tabela de resumo
-            materials.forEach(material => {
-                const row = document.createElement('tr');
-                row.classList.add('data-row');
-                row.innerHTML = `
-                    <td class="text-base font-semibold text-gray-800">${material}</td>
-                    <td class="text-base font-extrabold text-green-700">${summary[material].toFixed(2)}</td>
-                `;
-                if(summaryTableBody) summaryTableBody.appendChild(row);
+            const monthlyTotals = {};
+            allDepartures.forEach(item => {
+                if(item.date) {
+                    const monthKey = item.date.substring(0, 7);
+                    monthlyTotals[monthKey] = (monthlyTotals[monthKey] || 0) + item.quantity;
+                }
             });
+            let topMonth = '';
+            let maxQuantity = 0;
+            for (const month in monthlyTotals) {
+                if (monthlyTotals[month] > maxQuantity) {
+                    maxQuantity = monthlyTotals[month];
+                    topMonth = month;
+                }
+            }
+            if(!topMonth) {
+                topMonthOutput.innerHTML = '<p class="text-gray-500">Nenhum dado para analisar.</p>';
+                return;
+            }
+            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+            const [year, monthNum] = topMonth.split('-');
+            const monthName = monthNames[parseInt(monthNum, 10) - 1];
+            topMonthOutput.innerHTML = `
+                <p class="text-lg text-gray-600">Mês de Maior Consumo</p>
+                <p class="text-4xl font-bold text-blue-600 my-2">${monthName} de ${year}</p>
+                <p class="text-lg text-gray-500">Total de <span class="font-bold text-gray-800">${maxQuantity.toFixed(2)}</span> itens</p>
+            `;
+        }
+
+        function calculateSummary(filteredData, tableBody) {
+            tableBody.innerHTML = '';
+            const summary = {};
+            filteredData.forEach(item => {
+                const key = `${item.material}|${item.unit_of_measure || 'UNID'}`;
+                summary[key] = (summary[key] || 0) + item.quantity;
+            });
+            const keys = Object.keys(summary).sort();
+            if (keys.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-gray-500">Nenhum dado para este período.</td></tr>`;
+                return;
+            }
+            tableBody.innerHTML = keys.map(key => {
+                const [material, unit] = key.split('|');
+                return `
+                    <tr class="data-row">
+                        <td class="text-base font-semibold text-gray-900">${material}</td>
+                        <td class="text-sm text-gray-500">${unit}</td>
+                        <td class="text-base font-bold text-blue-600">${summary[key].toFixed(2)}</td>
+                    </tr>
+                `;
+            }).join('');
         }
         
-        // Inicializa a lista de sugestões ao carregar a página
-        window.onload = fillMaterialDatalist;
+        const generateAnalysis = async () => {
+             const tableRows = summaryTableBody.children;
+            if (tableRows.length === 0 || (tableRows.length === 1 && tableRows[0].children[0].colSpan === 3)) {
+                analysisOutput.innerHTML = '<p class="text-red-600 font-semibold">ERRO: Sem dados para analisar no dia selecionado.</p>';
+                return;
+            }
+            analysisOutput.innerHTML = '<p class="text-blue-600 font-semibold animate-pulse">Processando relatório...</p>';
+            let data = Array.from(tableRows).map(row => `${row.children[0].textContent} (${row.children[1].textContent}): ${row.children[2].textContent}`);
+            const userQuery = `Analise a seguinte lista de consumo diário e gere um breve relatório para o Gerente de Logística. Destaque os 3 itens de maior consumo e forneça uma sugestão de ação (ex: 'Monitorar estoque'). Lista: ${data.join('; ')}`;
+            const systemPrompt = "Você é um Analista Logístico de IA. Sua resposta deve ser um 'STATUS REPORT' formal em português. Use Markdown (negrito e listas).";
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            const payload = { contents: [{ parts: [{ text: userQuery }] }], systemInstruction: { parts: [{ text: systemPrompt }] }, };
+            try {
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "Falha ao gerar análise.";
+                analysisOutput.innerHTML = `<div class="p-4 bg-gray-50 border border-gray-200 mt-4 text-sm whitespace-pre-wrap rounded-lg">${text}</div>`;
+            } catch (error) {
+                analysisOutput.innerHTML = '<p class="text-red-600 font-semibold">ERRO DE COMUNICAÇÃO: Verifique a conexão.</p>';
+            }
+        };
+        window.generateAnalysis = generateAnalysis;
+
+        async function processTextData(text, dateForBatch) {
+            const lines = text.split('\n');
+            let successCount = 0, errorCount = 0, errorLines = [];
+            for (const [index, line] of lines.entries()) {
+                const trimmedLine = line.trim();
+                if (!trimmedLine) continue;
+                const parts = trimmedLine.split(/\s+/).filter(Boolean);
+                if (parts.length < 3) continue; 
+                const destination = parts.length > 3 ? parts.pop() : 'COZINHA';
+                let quantityStr = parts.pop();
+                const unit = parts.pop();
+                const material = parts.join(' ');
+                if (quantityStr.includes('/')) quantityStr = quantityStr.split('/')[0].trim();
+                if (quantityStr.includes('½')) quantityStr = "0.5";
+                const quantity = parseFloat(quantityStr.replace(',', '.'));
+                if (isNaN(quantity) || !material || !unit) {
+                    errorCount++; errorLines.push(index + 1); continue;
+                }
+                const success = await registerDeparture(material, quantity, dateForBatch, destination, unit);
+                if (success) successCount++;
+                else { errorCount++; errorLines.push(index + 1); }
+            }
+            let summaryMessage = `<p class="text-green-600 font-semibold">${successCount} registros importados com sucesso.</p>`;
+            if (errorCount > 0) summaryMessage += `<p class="text-red-600 font-semibold">${errorCount} linhas com formato inválido foram ignoradas. Linhas: ${errorLines.join(', ')}</p>`;
+            if (successCount === 0 && errorCount === 0) summaryMessage = `<p class="text-yellow-600 font-semibold">Nenhum dado válido para importação foi encontrado.</p>`;
+            batchUploadStatus.innerHTML = summaryMessage;
+        }
+
+        const handleFileUpload = async () => {
+            const fileInput = document.getElementById('word-file-input');
+            const file = fileInput.files[0];
+            const dateForBatch = document.getElementById('date').value;
+            if (!file || !dateForBatch) {
+                batchUploadStatus.innerHTML = `<p class="text-red-600 font-semibold">ERRO: Selecione um arquivo e a data da operação.</p>`;
+                return;
+            }
+            batchUploadStatus.innerHTML = '<p class="text-blue-600 font-semibold animate-pulse">Processando arquivo...</p>';
+            const reader = new FileReader();
+            if (file.name.endsWith('.docx')) {
+                reader.onload = async (e) => {
+                    try {
+                        const res = await mammoth.extractRawText({ arrayBuffer: e.target.result });
+                        await processTextData(res.value, dateForBatch);
+                    } catch (err) { batchUploadStatus.innerHTML = '<p class="text-red-600 font-semibold">ERRO: Falha ao ler .docx.</p>'; }
+                };
+                reader.readAsArrayBuffer(file);
+            } else if (file.name.endsWith('.txt')) {
+                reader.onload = async (e) => {
+                    try { await processTextData(e.target.result, dateForBatch); } 
+                    catch (err) { batchUploadStatus.innerHTML = '<p class="text-red-600 font-semibold">ERRO: Falha ao ler .txt.</p>';}
+                };
+                reader.readAsText(file);
+            } else {
+                 batchUploadStatus.innerHTML = '<p class="text-red-600 font-semibold">ERRO: Tipo de arquivo não suportado.</p>';
+            }
+        };
+        window.handleFileUpload = handleFileUpload;
+
+        const materialSuggestions = ["Cebola", "Batatas", "Abóbora", "Abobrinha", "Chuchu", "Cenoura", "Tomate", "Pimentão", "Cheiro verde", "Agrião", "Couve", "Loro", "Beterraba", "Aipim", "Batata doce", "Pepino", "Repolho", "Alface", "Quiabo", "Rúcula", "Alho", "Melancia", "Banana", "Limão", "Laranja", "Mamão", "Melão", "Abacaxi", "Maçã", "Tangerina", "Manga", "Manteiga", "Água mineral", "Água mineral com gás", "Refrigerante sabor guaraná", "Refrigerante sabor uva", "Refrigerante sabor cola", "Refrigerante coca cola", "Coca cola zero", "Ovo", "Requeijão nazza", "Salsicha", "Queijo", "Presunto", "Mortadela", "Bacon", "Linguiça", "Carne seca", "Massa de Pastel", "Ovo de codorna", "Cerveja império", "Cerveja Heineken", "Cerveja Stella", "Red bull", "Smirnoff ice", "Kovak", "Vinho Espumante", "Gin", "Monin", "Peixe", "Coxa e sobrecoxa", "Peito de frango", "Patinho", "Lagarto", "Lombo", "Miolo da pá", "Paleta sem músculo", "Coxão duro", "Fígado", "Coxão mole", "Coração alcatra", "Maminha da alcatra", "Acém", "Hambúrguer", "Batata frita", "Pão de queijo", "Garganta suína", "Máscara suína", "Joelho suíno", "Ponta de costela", "Kibe", "Bolinha de queijo", "Salgadinho de aipim", "Coxinha", "Risole de camarão", "Gelo", "Patinho cortado", "Charuto de carne moída", "Charuto de peito de frango", "Arroz branco", "Arroz parabolizado", "Macarrão", "Óleo", "Açúcar", "Feijão carioca", "Feijão preto", "Leite em pó", "Café", "Farinha de trigo", "Fubá", "Farinha de mandioca", "Farinha de rosca", "Xarope de guaraná", "Xarope de caju", "Ketchup sachê", "Mostarda sachê", "Maionese", "Ervilha", "Colorau", "Feijão Fradinho", "Sal fino", "Sal grosso", "Trigo Kibe", "Extrato de tomate", "Azeite de oliva", "Vinagre", "Óleo misto", "Molho de pimenta", "Azeitonas", "Batata palha", "Milho em conserva", "Ervilha em conserva", "Leite de coco", "Creme de leite", "Leite condensado", "Adoçante", "Canela em pó", "Fermento biológico", "Fermento químico", "Creme de Confeiteiro", "Suco em pó", "Amido de milho", "Gelatina", "Doce em pasta", "Achocolatado", "Mariola", "Amendoim", "Rosquinha Mabel", "Paçoca", "Geleia de mocotó", "Sequilhos", "Pit Stop", "AtivPlus", "Gatorade", "Biscoito Tucs", "Biscoito passatempo", "Guaracamp", "Biscoito amanteigado", "Amanteigado Goiabinha", "Barrinha de ração", "Rapadura"];
+        const unitSuggestions = ["UN", "KG", "L", "Saco", "Caixa", "Pç", "Pcte", "Fardo", "Balde", "Galao"];
+        
+        function fillDatalists() {
+            const materialDatalist = document.getElementById('material-suggestions');
+            materialDatalist.innerHTML = materialSuggestions.map(m => `<option value="${m}"></option>`).join('');
+            const unitDatalist = document.getElementById('unit-suggestions');
+            unitDatalist.innerHTML = unitSuggestions.map(u => `<option value="${u}"></option>`).join('');
+        }
+        window.onload = fillDatalists;
     </script>
 </head>
-<body class="p-4 sm:p-8">
-
-    <div class="max-w-4xl mx-auto">
-        <header class="mb-8">
-            <h1 class="text-3xl font-extrabold text-indigo-800 mb-2">Controle de Estoque Diário</h1>
-            <p class="text-gray-600">Registre as saídas de materiais do depósito e acompanhe o resumo do dia.</p>
-            <p id="user-id-display" class="text-xs text-gray-400 mt-1"></p>
-        </header>
-        
-        <!-- AVISO DE CONFIGURAÇÃO EXTERNA -->
-        <div id="external-config-warning" class="hidden bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-lg mb-6" role="alert">
-            <p class="font-bold">Aviso de Configuração!</p>
-            <p>Este aplicativo está usando a **configuração manual** do Firebase. Lembre-se de verificar suas **Regras de Segurança do Firestore** para permitir acesso de leitura/escrita à coleção `daily_departures_data`.</p>
-        </div>
-
-        <!-- Seção de Cadastro de Saída -->
-        <div class="bg-white p-6 rounded-xl container-shadow mb-8">
-            <h2 class="text-xl font-semibold text-indigo-700 mb-4 border-b pb-2">Registrar Nova Saída</h2>
-            
-            <div id="loading-indicator" class="text-center p-4 text-indigo-500">Carregando autenticação...</div>
-
-            <form id="add-departure-form" class="space-y-4"> 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <!-- Campo Data -->
-                    <div>
-                        <label for="date" class="block text-sm font-medium text-gray-700">Data da Saída</label>
-                        <input type="date" id="date" required 
-                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
-                    </div>
-
-                    <!-- Campo Material -->
-                    <div class="md:col-span-2">
-                        <label for="material-name" class="block text-sm font-medium text-gray-700">Material (Ex: Pimentão, Arroz)</label>
-                        <input type="text" id="material-name" list="material-suggestions" required placeholder="Digite ou selecione o material"
-                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
-                        <datalist id="material-suggestions"></datalist>
-                    </div>
-                </div>
-
-                <!-- Campo Quantidade -->
-                <div>
-                    <label for="quantity" class="block text-sm font-medium text-gray-700">Quantidade</label>
-                    <input type="number" id="quantity" required min="0.01" step="0.01" placeholder="Ex: 5 ou 0.5"
-                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
-                </div>
-
-                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-2">
-                    <button type="submit"
-                            class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg transition duration-150 ease-in-out shadow-md hover:shadow-lg">
-                        Registrar Saída
-                    </button>
-                    <p id="form-status" class="text-sm mt-3 sm:mt-0 sm:ml-4 text-gray-500"></p>
-                </div>
-            </form>
-        </div>
-
-        <!-- Seção de Filtro e Resumo/Log -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            
-            <!-- Tabela de Resumo Diário (Total por Material) -->
-            <div class="bg-white p-6 rounded-xl container-shadow">
-                <h2 class="text-xl font-semibold text-green-700 mb-4 border-b pb-2">Resumo de Saídas do Dia</h2>
-                
-                <table class="min-w-full divide-y divide-gray-200 rounded-lg overflow-hidden">
-                    <thead>
-                        <tr>
-                            <th class="bg-green-600 text-white">Material</th>
-                            <th class="bg-green-600 text-white">Total Saído</th>
-                        </tr>
-                    </thead>
-                    <tbody id="summary-table-body" class="bg-white divide-y divide-gray-200">
-                        <!-- Dados do Resumo serão injetados aqui -->
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Log de Saídas (Detalhe do Dia) -->
-            <div class="bg-white p-6 rounded-xl container-shadow">
-                <h2 class="text-xl font-semibold text-indigo-700 mb-4 border-b pb-2">Log de Saídas Detalhado</h2>
-                
-                <div class="mb-4">
-                    <label for="date-filter" class="block text-sm font-medium text-gray-700">Filtrar por Data:</label>
-                    <input type="date" id="date-filter"
-                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
-                </div>
-
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 rounded-lg overflow-hidden">
-                        <thead>
-                            <tr>
-                                <th class="bg-indigo-600 text-white">Hora</th>
-                                <th class="bg-indigo-600 text-white">Material</th>
-                                <th class="bg-indigo-600 text-white">Qtd.</th>
-                                <th class="bg-indigo-600 text-white">Registrado por</th>
-                            </tr>
-                        </thead>
-                        <tbody id="log-table-body" class="bg-white divide-y divide-gray-200">
-                            <!-- Dados do Log serão injetados aqui -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
+<body>
+    
+    <div id="loading-indicator" class="fixed inset-0 bg-gray-100/50 flex justify-center items-center z-50 backdrop-blur-sm">
+        <p class="text-blue-600 font-semibold text-lg">Carregando Sistema...</p>
     </div>
 
+    <div id="auth-container">
+        <div id="auth-card" class="max-w-md w-full p-8 md:p-10">
+            <!-- Container do Login -->
+            <div id="login-form-container">
+                <h1 class="text-3xl font-bold mb-6 text-center text-gray-800">Controle de Estoque</h1>
+                <p class="text-center text-gray-500 mb-6">Por favor, insira suas credenciais para continuar.</p>
+                <form id="login-form" class="space-y-6">
+                    <div>
+                        <label for="login-email" class="block text-sm font-medium text-gray-700">Email</label>
+                        <input type="email" id="login-email" required class="mt-1 block w-full p-3">
+                    </div>
+                    <div>
+                        <label for="login-password" class="block text-sm font-medium text-gray-700">Senha</label>
+                        <input type="password" id="login-password" required class="mt-1 block w-full p-3">
+                    </div>
+                    <button type="submit" class="w-full action-button py-3 px-6 text-base">Entrar</button>
+                </form>
+                <p class="mt-6 text-center text-sm text-gray-600">
+                    Não tem uma conta? <button onclick="toggleAuthForms()" class="font-semibold text-blue-600 hover:underline">Cadastre-se</button>
+                </p>
+            </div>
+            <!-- Container do Cadastro -->
+            <div id="register-form-container" class="hidden">
+                <h1 class="text-3xl font-bold mb-6 text-center text-gray-800">Criar Nova Conta</h1>
+                 <p class="text-center text-gray-500 mb-6">Preencha os campos para se registrar.</p>
+                <form id="register-form" class="space-y-6">
+                    <div>
+                        <label for="register-email" class="block text-sm font-medium text-gray-700">Email</label>
+                        <input type="email" id="register-email" required class="mt-1 block w-full p-3">
+                    </div>
+                    <div>
+                        <label for="register-password" class="block text-sm font-medium text-gray-700">Senha (mín. 6 caracteres)</label>
+                        <input type="password" id="register-password" required class="mt-1 block w-full p-3">
+                    </div>
+                    <button type="submit" class="w-full action-button py-3 px-6 text-base">Registrar</button>
+                </form>
+                <p class="mt-6 text-center text-sm text-gray-600">
+                    Já tem uma conta? <button onclick="toggleAuthForms()" class="font-semibold text-blue-600 hover:underline">Faça o login</button>
+                </p>
+            </div>
+            <div id="auth-status" class="mt-4"></div>
+        </div>
+    </div>
+
+
+    <div id="main-app-container" class="hidden p-4 sm:p-8 w-full">
+        <div class="max-w-7xl mx-auto">
+            <header class="mb-8 flex flex-col sm:flex-row justify-between sm:items-center">
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">
+                        CONTROLE DE ESTOQUE
+                    </h1>
+                    <p id="user-id-display" class="text-sm text-gray-500"></p>
+                </div>
+                <button id="logout-button" class="mt-4 sm:mt-0 secondary-button text-sm font-medium py-2 px-4 rounded-lg transition duration-200">Sair</button>
+            </header>
+
+            <!-- PAINEL DE NAVEGAÇÃO (DASHBOARD) -->
+            <div id="dashboard-container" class="">
+                 <h2 class="text-2xl font-semibold text-gray-800 mb-6">Painel Principal</h2>
+                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                     <!-- Card 1: Registrar Saídas -->
+                     <div onclick="showRegistro()" class="dashboard-card cursor-pointer p-6 content-container flex flex-col items-center text-center">
+                         <div class="bg-blue-100 p-3 rounded-full mb-4"><svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></div>
+                         <h3 class="text-lg font-bold text-gray-800 mb-2">Registrar Saídas</h3>
+                         <p class="text-sm text-gray-500">Lance as saídas de material, manual ou em lote.</p>
+                     </div>
+                     <!-- Card 2: Relatório Diário -->
+                     <div onclick="showRelatorios()" class="dashboard-card cursor-pointer p-6 content-container flex flex-col items-center text-center">
+                         <div class="bg-green-100 p-3 rounded-full mb-4"><svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></div>
+                         <h3 class="text-lg font-bold text-gray-800 mb-2">Relatório Diário</h3>
+                         <p class="text-sm text-gray-500">Visualize logs e resumos de consumo do dia.</p>
+                     </div>
+                      <!-- Card 3: Análise Semanal -->
+                     <div onclick="showSemanal()" class="dashboard-card cursor-pointer p-6 content-container flex flex-col items-center text-center">
+                         <div class="bg-yellow-100 p-3 rounded-full mb-4"><svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>
+                         <h3 class="text-lg font-bold text-gray-800 mb-2">Análise Semanal</h3>
+                         <p class="text-sm text-gray-500">Consulte o consumo total por semana de um mês.</p>
+                     </div>
+                      <!-- Card 4: Análise Mensal -->
+                     <div onclick="showMensal()" class="dashboard-card cursor-pointer p-6 content-container flex flex-col items-center text-center">
+                         <div class="bg-purple-100 p-3 rounded-full mb-4"><svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg></div>
+                         <h3 class="text-lg font-bold text-gray-800 mb-2">Análise Mensal</h3>
+                         <p class="text-sm text-gray-500">Veja o consumo total por mês e o pico de demanda.</p>
+                     </div>
+                 </div>
+            </div>
+
+            <!-- SEÇÃO DE REGISTRO (Oculta) -->
+            <div id="registro-container" class="hidden">
+                 <button onclick="showDashboard()" class="secondary-button mb-6 font-semibold py-2 px-4 rounded-lg flex items-center text-sm"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>Voltar ao Painel</button>
+                 <h2 class="text-2xl font-semibold text-gray-800 mb-6">Registrar Saídas</h2>
+                <div class="p-6 md:p-8 mb-8 content-container">
+                    <h3 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-3">Registro Manual</h3>
+                    <form id="add-departure-form" class="space-y-6 pt-4"> 
+                        <div>
+                             <label for="material-name" class="block text-sm font-medium text-gray-700">1. Nome do Material</label>
+                             <input type="text" id="material-name" name="material-name" list="material-suggestions" required placeholder="Digite ou selecione o material" class="mt-1 block w-full p-3 uppercase">
+                             <datalist id="material-suggestions"></datalist>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label for="quantity" class="block text-sm font-medium text-gray-700">2. Quantidade</label>
+                                <input type="number" id="quantity" name="quantity" step="0.01" required min="0.01" placeholder="Ex: 1.5" class="mt-1 block w-full p-3">
+                            </div>
+                            <div>
+                                <label for="unit_of_measure" class="block text-sm font-medium text-gray-700">3. Unidade de Medida</label>
+                                <input type="text" id="unit_of_measure" name="unit_of_measure" list="unit-suggestions" required placeholder="Ex: KG, UN, L" class="mt-1 block w-full p-3 uppercase">
+                                <datalist id="unit-suggestions"></datalist>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label for="date" class="block text-sm font-medium text-gray-700">4. Data da Saída</label>
+                                <input type="date" id="date" required class="mt-1 block w-full p-3">
+                            </div>
+                            <div>
+                                <label for="destination" class="block text-sm font-medium text-gray-700">5. Destino</label>
+                                <input type="text" id="destination" name="destination" required placeholder="Ex: Cozinha Principal" class="mt-1 block w-full p-3">
+                            </div>
+                        </div>
+                        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-4">
+                            <button type="submit" class="w-full sm:w-auto action-button font-medium py-3 px-8">Executar Registro</button>
+                            <p id="form-status" class="text-sm mt-3 sm:mt-0 sm:ml-4 font-semibold"></p>
+                        </div>
+                    </form>
+                </div>
+                <div class="p-6 md:p-8 mb-8 content-container">
+                    <h3 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-3">Registro em Lote</h3>
+                    <div class="bg-gray-50 p-4 border border-dashed border-gray-300 mb-4 text-sm rounded-lg mt-4">
+                        <h4 class="font-semibold text-gray-800">Instruções:</h4>
+                        <p class="mt-2 text-gray-600">Crie um arquivo (.docx ou .txt) com as colunas na ordem: <code class="bg-gray-200 p-1 font-mono text-xs rounded">MATERIAL UNIDADE QUANTIDADE DESTINO</code></p>
+                        <p class="mt-2 text-gray-600"><strong>Importante:</strong> A data será a que estiver no campo "DATA" acima.</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center pt-4">
+                        <div>
+                            <label for="word-file-input" class="block text-sm font-medium text-gray-700 mb-1">Arquivo de dados</label>
+                            <input type="file" id="word-file-input" accept=".docx,.txt" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-200 file:text-gray-700 hover:file:bg-gray-300 cursor-pointer">
+                        </div>
+                        <div class="self-end">
+                             <button onclick="handleFileUpload()" class="w-full action-button font-medium py-3 px-8">Processar Arquivo</button>
+                        </div>
+                    </div>
+                     <div id="batch-upload-status" class="mt-4 text-sm font-semibold"></div>
+                </div>
+            </div>
+
+            <!-- SEÇÃO DE RELATÓRIOS (Oculta) -->
+            <div id="relatorios-container" class="hidden">
+                 <button onclick="showDashboard()" class="secondary-button mb-6 font-semibold py-2 px-4 rounded-lg flex items-center text-sm"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>Voltar ao Painel</button>
+                 <h2 class="text-2xl font-semibold text-gray-800 mb-6">Relatório Diário</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                    <div class="lg:col-span-3 p-6 content-container">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-3">Log de Transações</h3>
+                        <div class="my-4">
+                            <label for="date-filter" class="block text-sm font-medium text-gray-700">Selecionar Data:</label>
+                            <input type="date" id="date-filter" class="mt-1 block w-full p-2">
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full">
+                                <thead><tr><th>Hora</th><th>Material</th><th>Unid.</th><th>Qtd.</th><th>Destino</th><th>Por</th><th>Ações</th></tr></thead>
+                                <tbody id="log-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-2 p-6 content-container">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-3">Resumo do Dia</h3>
+                        <div class="overflow-x-auto my-4">
+                            <table class="min-w-full">
+                                <thead><tr><th>Material</th><th>Unid.</th><th>Total</th></tr></thead>
+                                <tbody id="summary-table-body"></tbody>
+                            </table>
+                        </div>
+                        <div class="mt-6 border-t pt-4">
+                            <button onclick="generateAnalysis()" class="w-full action-button text-sm font-medium py-3 px-4">Gerar Análise (IA) ✨</button>
+                            <div id="analysis-output" class="mt-4 text-gray-600"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- SEÇÃO SEMANAL (Oculta) -->
+            <div id="semanal-container" class="hidden">
+                <button onclick="showDashboard()" class="secondary-button mb-6 font-semibold py-2 px-4 rounded-lg flex items-center text-sm"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>Voltar ao Painel</button>
+                <h2 class="text-2xl font-semibold text-gray-800 mb-6">Análise Semanal</h2>
+                <div class="p-6 md:p-8 content-container">
+                    <h3 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-3">Consumo Semanal</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 my-4">
+                        <div>
+                            <label for="week-month-filter" class="block text-sm font-medium text-gray-700">Selecionar Mês:</label>
+                            <select id="week-month-filter" class="mt-1 block w-full p-2"></select>
+                        </div>
+                        <div>
+                            <label for="week-number-filter" class="block text-sm font-medium text-gray-700">Selecionar Semana:</label>
+                            <select id="week-number-filter" class="mt-1 block w-full p-2">
+                                <option value="1">Semana 1 (Dias 1-7)</option>
+                                <option value="2">Semana 2 (Dias 8-14)</option>
+                                <option value="3">Semana 3 (Dias 15-21)</option>
+                                <option value="4">Semana 4 (Dia 22 em diante)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full">
+                            <thead><tr><th>Material</th><th>Unid.</th><th>Total Consumido</th></tr></thead>
+                            <tbody id="weekly-summary-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- SEÇÃO MENSAL (Oculta) -->
+            <div id="mensal-container" class="hidden">
+                 <button onclick="showDashboard()" class="secondary-button mb-6 font-semibold py-2 px-4 rounded-lg flex items-center text-sm"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>Voltar ao Painel</button>
+                 <h2 class="text-2xl font-semibold text-gray-800 mb-6">Análise Mensal</h2>
+                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                     <div class="lg:col-span-2 p-6 content-container">
+                         <h3 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-3">Consumo Mensal</h3>
+                         <div class="my-4">
+                             <label for="month-filter" class="block text-sm font-medium text-gray-700">Selecionar Mês:</label>
+                             <input type="month" id="month-filter" class="mt-1 block w-full p-2">
+                         </div>
+                         <div class="overflow-x-auto">
+                             <table class="min-w-full">
+                                 <thead><tr><th>Material</th><th>Unid.</th><th>Total Consumido</th></tr></thead>
+                                 <tbody id="monthly-summary-table-body"></tbody>
+                             </table>
+                         </div>
+                     </div>
+                     <div class="p-6 content-container bg-blue-50 border-blue-200 flex flex-col justify-center items-center">
+                         <h3 class="text-xl font-semibold text-blue-800 mb-4 text-center">Pico de Demanda</h3>
+                         <div id="top-month-output" class="text-center">
+                             <!-- Conteúdo gerado via JS -->
+                         </div>
+                     </div>
+                 </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
 
