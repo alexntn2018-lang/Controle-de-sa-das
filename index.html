@@ -59,13 +59,13 @@
             border-radius: 0.5rem; /* Cantos arredondados */
         }
         
-        /* Estilo para input readonly */
+        /* Estilo para input readonly (agora não mais usado no form) */
         input[readonly] {
             background-color: #e5e7eb; /* bg-gray-200 */
             color: #6b7280; /* text-gray-500 */
             cursor: not-allowed;
         }
-
+        
         /* Tabelas com Novo Design Limpo */
         th {
             background-color: #f9fafb; /* Cinza bem claro */
@@ -366,15 +366,16 @@
             const form = e.target;
             
             // Lê os valores do form (agora com o <select>)
-            const selectedMaterial = form.elements['material-name'].value;
-            const predefinedUnit = masterMaterialList[selectedMaterial]?.unit || ''; // Pega a unidade da lista
+            const selectedMaterialKey = form.elements['material-name'].value;
+            // ATUALIZADO: Lê a unidade do input de texto
+            const unitFromInput = form.elements['unit_of_measure'].value.trim();
 
             await registerDeparture(
-                masterMaterialList[selectedMaterial]?.displayName || '', // Pega o nome de exibição
+                masterMaterialList[selectedMaterialKey]?.displayName || '', // Pega o nome de exibição
                 parseFloat(form.elements['quantity'].value.trim()),
                 form.elements['date'].value.trim(),
                 form.elements['destination'].value.trim(),
-                predefinedUnit // Usa a unidade predefinida
+                unitFromInput // Usa a unidade do input
             );
             
             form.reset(); // Reseta o formulário
@@ -406,6 +407,10 @@
                 renderData(dateFilterInput.value);
                 renderWeeklySummary();
                 renderMonthlySummary();
+                
+                // ATUALIZAÇÃO: Chama a nova função de sugestões de destino
+                populateDestinationSuggestions(allDepartures);
+
             }, (error) => {
                 console.error("Erro de leitura do Firestore: ", error);
             });
@@ -418,179 +423,178 @@
 
         // --- INÍCIO: LÓGICA DE CATEGORIZAÇÃO E LISTA MESTRA ---
         
-        // Esta é a nova "Fonte da Verdade" para todos os materiais.
-        // A chave (ex: "CEBOLA") é usada para referência interna e validação.
+        // ATUALIZADO: 'unit' removida da lista mestra.
         const masterMaterialList = {
             // Hortifrúti
-            "CEBOLA": { displayName: "Cebola", unit: "KG", category: "Hortifrúti" },
-            "BATATAS": { displayName: "Batatas", unit: "KG", category: "Hortifrúti" },
-            "ABOBORA": { displayName: "Abóbora", unit: "KG", category: "Hortifrúti" },
-            "ABOBRINHA": { displayName: "Abobrinha", unit: "KG", category: "Hortifrúti" },
-            "CHUCHU": { displayName: "Chuchu", unit: "KG", category: "Hortifrúti" },
-            "CENOURA": { displayName: "Cenoura", unit: "KG", category: "Hortifrúti" },
-            "TOMATE": { displayName: "Tomate", unit: "KG", category: "Hortifrúti" },
-            "PIMENTAO": { displayName: "Pimentão", unit: "KG", category: "Hortifrúti" },
-            "CHEIRO VERDE": { displayName: "Cheiro verde", unit: "UN", category: "Hortifrúti" },
-            "AGRIAO": { displayName: "Agrião", unit: "UN", category: "Hortifrúti" },
-            "COUVE": { displayName: "Couve", unit: "UN", category: "Hortifrúti" },
-            "LORO": { displayName: "Loro", unit: "UN", category: "Hortifrúti" },
-            "BETERRABA": { displayName: "Beterraba", unit: "KG", category: "Hortifrúti" },
-            "AIPIM": { displayName: "Aipim", unit: "KG", category: "Hortifrúti" },
-            "BATATA DOCE": { displayName: "Batata doce", unit: "KG", category: "Hortifrúti" },
-            "PEPINO": { displayName: "Pepino", unit: "KG", category: "Hortifrúti" },
-            "REPOLHO": { displayName: "Repolho", unit: "UN", category: "Hortifrúti" },
-            "ALFACE": { displayName: "Alface", unit: "UN", category: "Hortifrúti" },
-            "QUIABO": { displayName: "Quiabo", unit: "KG", category: "Hortifrúti" },
-            "RUCULA": { displayName: "Rúcula", unit: "UN", category: "Hortifrúti" },
-            "ALHO": { displayName: "Alho", unit: "KG", category: "Hortifrúti" },
+            "CEBOLA": { displayName: "Cebola", category: "Hortifrúti" },
+            "BATATAS": { displayName: "Batatas", category: "Hortifrúti" },
+            "ABOBORA": { displayName: "Abóbora", category: "Hortifrúti" },
+            "ABOBRINHA": { displayName: "Abobrinha", category: "Hortifrúti" },
+            "CHUCHU": { displayName: "Chuchu", category: "Hortifrúti" },
+            "CENOURA": { displayName: "Cenoura", category: "Hortifrúti" },
+            "TOMATE": { displayName: "Tomate", category: "Hortifrúti" },
+            "PIMENTAO": { displayName: "Pimentão", category: "Hortifrúti" },
+            "CHEIRO VERDE": { displayName: "Cheiro verde", category: "Hortifrúti" },
+            "AGRIAO": { displayName: "Agrião", category: "Hortifrúti" },
+            "COUVE": { displayName: "Couve", category: "Hortifrúti" },
+            "LORO": { displayName: "Loro", category: "Hortifrúti" },
+            "BETERRABA": { displayName: "Beterraba", category: "Hortifrúti" },
+            "AIPIM": { displayName: "Aipim", category: "Hortifrúti" },
+            "BATATA DOCE": { displayName: "Batata doce", category: "Hortifrúti" },
+            "PEPINO": { displayName: "Pepino", category: "Hortifrúti" },
+            "REPOLHO": { displayName: "Repolho", category: "Hortifrúti" },
+            "ALFACE": { displayName: "Alface", category: "Hortifrúti" },
+            "QUIABO": { displayName: "Quiabo", category: "Hortifrúti" },
+            "RUCULA": { displayName: "Rúcula", category: "Hortifrúti" },
+            "ALHO": { displayName: "Alho", category: "Hortifrúti" },
             
             // Frutas
-            "MELANCIA": { displayName: "Melancia", unit: "KG", category: "Frutas" },
-            "BANANA": { displayName: "Banana", unit: "KG", category: "Frutas" },
-            "LIMAO": { displayName: "Limão", unit: "KG", category: "Frutas" },
-            "LARANJA": { displayName: "Laranja", unit: "KG", category: "Frutas" },
-            "MAMAO": { displayName: "Mamão", unit: "UN", category: "Frutas" },
-            "MELAO": { displayName: "Melão", unit: "UN", category: "Frutas" },
-            "ABACAXI": { displayName: "Abacaxi", unit: "UN", category: "Frutas" },
-            "MACA": { displayName: "Maçã", unit: "KG", category: "Frutas" },
-            "TANGERINA": { displayName: "Tangerina", unit: "KG", category: "Frutas" },
-            "MANGA": { displayName: "Manga", unit: "KG", category: "Frutas" },
+            "MELANCIA": { displayName: "Melancia", category: "Frutas" },
+            "BANANA": { displayName: "Banana", category: "Frutas" },
+            "LIMAO": { displayName: "Limão", category: "Frutas" },
+            "LARANJA": { displayName: "Laranja", category: "Frutas" },
+            "MAMAO": { displayName: "Mamão", category: "Frutas" },
+            "MELAO": { displayName: "Melão", category: "Frutas" },
+            "ABACAXI": { displayName: "Abacaxi", category: "Frutas" },
+            "MACA": { displayName: "Maçã", category: "Frutas" },
+            "TANGERINA": { displayName: "Tangerina", category: "Frutas" },
+            "MANGA": { displayName: "Manga", category: "Frutas" },
             
             // Proteínas & Frios
-            "OVO": { displayName: "Ovo", unit: "UN", category: "Proteínas & Frios" },
-            "OVO DE CODORNA": { displayName: "Ovo de codorna", unit: "UN", category: "Proteínas & Frios" },
-            "SALSICHA": { displayName: "Salsicha", unit: "KG", category: "Proteínas & Frios" },
-            "PRESUNTO": { displayName: "Presunto", unit: "KG", category: "Proteínas & Frios" },
-            "MORTADELA": { displayName: "Mortadela", unit: "KG", category: "Proteínas & Frios" },
-            "BACON": { displayName: "Bacon", unit: "KG", category: "Proteínas & Frios" },
-            "LINGUICA": { displayName: "Linguiça", unit: "KG", category: "Proteínas & Frios" },
-            "CARNE SECA": { displayName: "Carne seca", unit: "KG", category: "Proteínas & Frios" },
-            "PEIXE": { displayName: "Peixe", unit: "KG", category: "Proteínas & Frios" },
-            "COXA E SOBRECOXA": { displayName: "Coxa e sobrecoxa", unit: "KG", category: "Proteínas & Frios" },
-            "PEITO DE FRANGO": { displayName: "Peito de frango", unit: "KG", category: "Proteínas & Frios" },
-            "PATINHO": { displayName: "Patinho", unit: "KG", category: "Proteínas & Frios" },
-            "LAGARTO": { displayName: "Lagarto", unit: "KG", category: "Proteínas & Frios" },
-            "LOMBO": { displayName: "Lombo", unit: "KG", category: "Proteínas & Frios" },
-            "MIOLO DA PA": { displayName: "Miolo da pá", unit: "KG", category: "Proteínas & Frios" },
-            "PALETA SEM MUSCULO": { displayName: "Paleta sem músculo", unit: "KG", category: "Proteínas & Frios" },
-            "COXAO DURO": { displayName: "Coxão duro", unit: "KG", category: "Proteínas & Frios" },
-            "FIGADO": { displayName: "Fígado", unit: "KG", category: "Proteínas & Frios" },
-            "COXAO MOLE": { displayName: "Coxão mole", unit: "KG", category: "Proteínas & Frios" },
-            "CORACAO ALCATRA": { displayName: "Coração alcatra", unit: "KG", category: "Proteínas & Frios" },
-            "MAMINHA DA ALCATRA": { displayName: "Maminha da alcatra", unit: "KG", category: "Proteínas & Frios" },
-            "ACEM": { displayName: "Acém", unit: "KG", category: "Proteínas & Frios" },
-            "GARGANTA SUINA": { displayName: "Garganta suína", unit: "KG", category: "Proteínas & Frios" },
-            "MASCARA SUINA": { displayName: "Máscara suína", unit: "KG", category: "Proteínas & Frios" },
-            "JOELHO SUINO": { displayName: "Joelho suíno", unit: "KG", category: "Proteínas & Frios" },
-            "PONTA DE COSTELA": { displayName: "Ponta de costela", unit: "KG", category: "Proteínas & Frios" },
-            "PATINHO CORTADO": { displayName: "Patinho cortado", unit: "KG", category: "Proteínas & Frios" },
-            "CHARUTO DE CARNE MOIDA": { displayName: "Charuto de carne moída", unit: "KG", category: "Proteínas & Frios" },
-            "CHARUTO DE PEITO DE FRANGO": { displayName: "Charuto de peito de frango", unit: "KG", category: "Proteínas & Frios" },
+            "OVO": { displayName: "Ovo", category: "Proteínas & Frios" },
+            "OVO DE CODORNA": { displayName: "Ovo de codorna", category: "Proteínas & Frios" },
+            "SALSICHA": { displayName: "Salsicha", category: "Proteínas & Frios" },
+            "PRESUNTO": { displayName: "Presunto", category: "Proteínas & Frios" },
+            "MORTADELA": { displayName: "Mortadela", category: "Proteínas & Frios" },
+            "BACON": { displayName: "Bacon", category: "Proteínas & Frios" },
+            "LINGUICA": { displayName: "Linguiça", category: "Proteínas & Frios" },
+            "CARNE SECA": { displayName: "Carne seca", category: "Proteínas & Frios" },
+            "PEIXE": { displayName: "Peixe", category: "Proteínas & Frios" },
+            "COXA E SOBRECOXA": { displayName: "Coxa e sobrecoxa", category: "Proteínas & Frios" },
+            "PEITO DE FRANGO": { displayName: "Peito de frango", category: "Proteínas & Frios" },
+            "PATINHO": { displayName: "Patinho", category: "Proteínas & Frios" },
+            "LAGARTO": { displayName: "Lagarto", category: "Proteínas & Frios" },
+            "LOMBO": { displayName: "Lombo", category: "Proteínas & Frios" },
+            "MIOLO DA PA": { displayName: "Miolo da pá", category: "Proteínas & Frios" },
+            "PALETA SEM MUSCULO": { displayName: "Paleta sem músculo", category: "Proteínas & Frios" },
+            "COXAO DURO": { displayName: "Coxão duro", category: "Proteínas & Frios" },
+            "FIGADO": { displayName: "Fígado", category: "Proteínas & Frios" },
+            "COXAO MOLE": { displayName: "Coxão mole", category: "Proteínas & Frios" },
+            "CORACAO ALCATRA": { displayName: "Coração alcatra", category: "Proteínas & Frios" },
+            "MAMINHA DA ALCATRA": { displayName: "Maminha da alcatra", category: "Proteínas & Frios" },
+            "ACEM": { displayName: "Acém", category: "Proteínas & Frios" },
+            "GARGANTA SUINA": { displayName: "Garganta suína", category: "Proteínas & Frios" },
+            "MASCARA SUINA": { displayName: "Máscara suína", category: "Proteínas & Frios" },
+            "JOELHO SUINO": { displayName: "Joelho suíno", category: "Proteínas & Frios" },
+            "PONTA DE COSTELA": { displayName: "Ponta de costela", category: "Proteínas & Frios" },
+            "PATINHO CORTADO": { displayName: "Patinho cortado", category: "Proteínas & Frios" },
+            "CHARUTO DE CARNE MOIDA": { displayName: "Charuto de carne moída", category: "Proteínas & Frios" },
+            "CHARUTO DE PEITO DE FRANGO": { displayName: "Charuto de peito de frango", category: "Proteínas & Frios" },
 
             // Laticínios
-            "QUEIJO": { displayName: "Queijo", unit: "KG", category: "Laticínios" },
-            "MANTEIGA": { displayName: "Manteiga", unit: "KG", category: "Laticínios" },
-            "REQUEIJAO NAZZA": { displayName: "Requeijão nazza", unit: "UN", category: "Laticínios" },
-            "LEITE EM PO": { displayName: "Leite em pó", unit: "KG", category: "Laticínios" },
-            "CREME DE LEITE": { displayName: "Creme de leite", unit: "UN", category: "Laticínios" },
-            "LEITE CONDENSADO": { displayName: "Leite condensado", unit: "UN", category: "Laticínios" },
+            "QUEIJO": { displayName: "Queijo", category: "Laticínios" },
+            "MANTEIGA": { displayName: "Manteiga", category: "Laticínios" },
+            "REQUEIJAO NAZZA": { displayName: "Requeijão nazza", category: "Laticínios" },
+            "LEITE EM PO": { displayName: "Leite em pó", category: "Laticínios" },
+            "CREME DE LEITE": { displayName: "Creme de leite", category: "Laticínios" },
+            "LEITE CONDENSADO": { displayName: "Leite condensado", category: "Laticínios" },
             
             // Sacaria (Secos)
-            "ARROZ BRANCO": { displayName: "Arroz branco", unit: "KG", category: "Sacaria (Secos)" },
-            "ARROZ PARABOLIZADO": { displayName: "Arroz parabolizado", unit: "KG", category: "Sacaria (Secos)" },
-            "MACARRAO": { displayName: "Macarrão", unit: "KG", category: "Sacaria (Secos)" },
-            "OLEO": { displayName: "Óleo", unit: "L", category: "Sacaria (Secos)" },
-            "ACUCAR": { displayName: "Açúcar", unit: "KG", category: "Sacaria (Secos)" },
-            "FEIJAO CARIOCA": { displayName: "Feijão carioca", unit: "KG", category: "Sacaria (Secos)" },
-            "FEIJAO PRETO": { displayName: "Feijão preto", unit: "KG", category: "Sacaria (Secos)" },
-            "CAFE": { displayName: "Café", unit: "KG", category: "Sacaria (Secos)" },
-            "FARINHA DE TRIGO": { displayName: "Farinha de trigo", unit: "KG", category: "Sacaria (Secos)" },
-            "FUBA": { displayName: "Fubá", unit: "KG", category: "Sacaria (Secos)" },
-            "FARINHA DE MANDIOCA": { displayName: "Farinha de mandioca", unit: "KG", category: "Sacaria (Secos)" },
-            "FARINHA DE ROSCA": { displayName: "Farinha de rosca", unit: "KG", category: "Sacaria (Secos)" },
-            "FEIJAO FRADINHO": { displayName: "Feijão Fradinho", unit: "KG", category: "Sacaria (Secos)" },
-            "SAL FINO": { displayName: "Sal fino", unit: "KG", category: "Sacaria (Secos)" },
-            "SAL GROSSO": { displayName: "Sal grosso", unit: "KG", category: "Sacaria (Secos)" },
-            "TRIGO KIBE": { displayName: "Trigo Kibe", unit: "KG", category: "Sacaria (Secos)" },
-            "AMIDO DE MILHO": { displayName: "Amido de milho", unit: "KG", category: "Sacaria (Secos)" },
-            "ACHOCOLATADO": { displayName: "Achocolatado", unit: "KG", category: "Sacaria (Secos)" },
+            "ARROZ BRANCO": { displayName: "Arroz branco", category: "Sacaria (Secos)" },
+            "ARROZ PARABOLIZADO": { displayName: "Arroz parabolizado", category: "Sacaria (Secos)" },
+            "MACARRAO": { displayName: "Macarrão", category: "Sacaria (Secos)" },
+            "OLEO": { displayName: "Óleo", category: "Sacaria (Secos)" },
+            "ACUCAR": { displayName: "Açúcar", category: "Sacaria (Secos)" },
+            "FEIJAO CARIOCA": { displayName: "Feijão carioca", category: "Sacaria (Secos)" },
+            "FEIJAO PRETO": { displayName: "Feijão preto", category: "Sacaria (Secos)" },
+            "CAFE": { displayName: "Café", category: "Sacaria (Secos)" },
+            "FARINHA DE TRIGO": { displayName: "Farinha de trigo", category: "Sacaria (Secos)" },
+            "FUBA": { displayName: "Fubá", category: "Sacaria (Secos)" },
+            "FARINHA DE MANDIOCA": { displayName: "Farinha de mandioca", category: "Sacaria (Secos)" },
+            "FARINHA DE ROSCA": { displayName: "Farinha de rosca", category: "Sacaria (Secos)" },
+            "FEIJAO FRADINHO": { displayName: "Feijão Fradinho", category: "Sacaria (Secos)" },
+            "SAL FINO": { displayName: "Sal fino", category: "Sacaria (Secos)" },
+            "SAL GROSSO": { displayName: "Sal grosso", category: "Sacaria (Secos)" },
+            "TRIGO KIBE": { displayName: "Trigo Kibe", category: "Sacaria (Secos)" },
+            "AMIDO DE MILHO": { displayName: "Amido de milho", category: "Sacaria (Secos)" },
+            "ACHOCOLATADO": { displayName: "Achocolatado", category: "Sacaria (Secos)" },
             
             // Mercearia (Condimentos & Conservas)
-            "KETCHUP SACHE": { displayName: "Ketchup sachê", unit: "UN", category: "Mercearia" },
-            "MOSTARDA SACHE": { displayName: "Mostarda sachê", unit: "UN", category: "Mercearia" },
-            "MAIONESE": { displayName: "Maionese", unit: "UN", category: "Mercearia" },
-            "ERVILHA": { displayName: "Ervilha", unit: "LATA", category: "Mercearia" },
-            "COLORAU": { displayName: "Colorau", unit: "KG", category: "Mercearia" },
-            "EXTRATO DE TOMATE": { displayName: "Extrato de tomate", unit: "LATA", category: "Mercearia" },
-            "AZEITE DE OLIVA": { displayName: "Azeite de oliva", unit: "L", category: "Mercearia" },
-            "VINAGRE": { displayName: "Vinagre", unit: "L", category: "Mercearia" },
-            "OLEO MISTO": { displayName: "Óleo misto", unit: "L", category: "Mercearia" },
-            "MOLHO DE PIMENTA": { displayName: "Molho de pimenta", unit: "UN", category: "Mercearia" },
-            "AZEITONAS": { displayName: "Azeitonas", unit: "KG", category: "Mercearia" },
-            "BATATA PALHA": { displayName: "Batata palha", unit: "PCTE", category: "Mercearia" },
-            "MILHO EM CONSERVA": { displayName: "Milho em conserva", unit: "LATA", category: "Mercearia" },
-            "ERVILHA EM CONSERVA": { displayName: "Ervilha em conserva", unit: "LATA", category: "Mercearia" },
-            "LEITE DE COCO": { displayName: "Leite de coco", unit: "UN", category: "Mercearia" },
-            "ADOÇANTE": { displayName: "Adoçante", unit: "UN", category: "Mercearia" },
-            "CANELA EM PO": { displayName: "Canela em pó", unit: "KG", category: "Mercearia" },
-            "FERMENTO BIOLOGICO": { displayName: "Fermento biológico", unit: "UN", category: "Mercearia" },
-            "FERMENTO QUIMICO": { displayName: "Fermento químico", unit: "UN", category: "Mercearia" },
-            "CREME DE CONFEITEIRO": { displayName: "Creme de Confeiteiro", unit: "KG", category: "Mercearia" },
-            "GELATINA": { displayName: "Gelatina", unit: "UN", category: "Mercearia" },
-            "DOCE EM PASTA": { displayName: "Doce em pasta", unit: "KG", category: "Mercearia" },
+            "KETCHUP SACHE": { displayName: "Ketchup sachê", category: "Mercearia" },
+            "MOSTARDA SACHE": { displayName: "Mostarda sachê", category: "Mercearia" },
+            "MAIONESE": { displayName: "Maionese", category: "Mercearia" },
+            "ERVILHA": { displayName: "Ervilha", category: "Mercearia" },
+            "COLORAU": { displayName: "Colorau", category: "Mercearia" },
+            "EXTRATO DE TOMATE": { displayName: "Extrato de tomate", category: "Mercearia" },
+            "AZEITE DE OLIVA": { displayName: "Azeite de oliva", category: "Mercearia" },
+            "VINAGRE": { displayName: "Vinagre", category: "Mercearia" },
+            "OLEO MISTO": { displayName: "Óleo misto", category: "Mercearia" },
+            "MOLHO DE PIMENTA": { displayName: "Molho de pimenta", category: "Mercearia" },
+            "AZEITONAS": { displayName: "Azeitonas", category: "Mercearia" },
+            "BATATA PALHA": { displayName: "Batata palha", category: "Mercearia" },
+            "MILHO EM CONSERVA": { displayName: "Milho em conserva", category: "Mercearia" },
+            "ERVILHA EM CONSERVA": { displayName: "Ervilha em conserva", category: "Mercearia" },
+            "LEITE DE COCO": { displayName: "Leite de coco", category: "Mercearia" },
+            "ADOÇANTE": { displayName: "Adoçante", category: "Mercearia" },
+            "CANELA EM PO": { displayName: "Canela em pó", category: "Mercearia" },
+            "FERMENTO BIOLOGICO": { displayName: "Fermento biológico", category: "Mercearia" },
+            "FERMENTO QUIMICO": { displayName: "Fermento químico", category: "Mercearia" },
+            "CREME DE CONFEITEIRO": { displayName: "Creme de Confeiteiro", category: "Mercearia" },
+            "GELATINA": { displayName: "Gelatina", category: "Mercearia" },
+            "DOCE EM PASTA": { displayName: "Doce em pasta", category: "Mercearia" },
             
             // Bebidas
-            "AGUA MINERAL": { displayName: "Água mineral", unit: "UN", category: "Bebidas" },
-            "AGUA MINERAL COM GAS": { displayName: "Água mineral com gás", unit: "UN", category: "Bebidas" },
-            "REFRIGERANTE SABOR GUARANA": { displayName: "Refrigerante sabor guaraná", unit: "UN", category: "Bebidas" },
-            "REFRIGERANTE SABOR UVA": { displayName: "Refrigerante sabor uva", unit: "UN", category: "Bebidas" },
-            "REFRIGERANTE SABOR COLA": { displayName: "Refrigerante sabor cola", unit: "UN", category: "Bebidas" },
-            "REFRIGERANTE COCA COLA": { displayName: "Refrigerante coca cola", unit: "UN", category: "Bebidas" },
-            "COCA COLA ZERO": { displayName: "Coca cola zero", unit: "UN", category: "Bebidas" },
-            "CERVEJA IMPERIO": { displayName: "Cerveja império", unit: "UN", category: "Bebidas" },
-            "CERVEJA HEINEKEN": { displayName: "Cerveja Heineken", unit: "UN", category: "Bebidas" },
-            "CERVEJA STELLA": { displayName: "Cerveja Stella", unit: "UN", category: "Bebidas" },
-            "RED BULL": { displayName: "Red bull", unit: "UN", category: "Bebidas" },
-            "SMIRNOFF ICE": { displayName: "Smirnoff ice", unit: "UN", category: "Bebidas" },
-            "KOVAK": { displayName: "Kovak", unit: "UN", category: "Bebidas" },
-            "VINHO ESPUMANTE": { displayName: "Vinho Espumante", unit: "UN", category: "Bebidas" },
-            "GIN": { displayName: "Gin", unit: "UN", category: "Bebidas" },
-            "MONIN": { displayName: "Monin", unit: "UN", category: "Bebidas" },
-            "XAROPE DE GUARANA": { displayName: "Xarope de guaraná", unit: "L", category: "Bebidas" },
-            "XAROPE DE CAJU": { displayName: "Xarope de caju", unit: "L", category: "Bebidas" },
-            "SUCO EM PO": { displayName: "Suco em pó", unit: "UN", category: "Bebidas" },
-            "GATORADE": { displayName: "Gatorade", unit: "UN", category: "Bebidas" },
-            "GUARACAMP": { displayName: "Guaracamp", unit: "UN", category: "Bebidas" },
+            "AGUA MINERAL": { displayName: "Água mineral", category: "Bebidas" },
+            "AGUA MINERAL COM GAS": { displayName: "Água mineral com gás", category: "Bebidas" },
+            "REFRIGERANTE SABOR GUARANA": { displayName: "Refrigerante sabor guaraná", category: "Bebidas" },
+            "REFRIGERANTE SABOR UVA": { displayName: "Refrigerante sabor uva", category: "Bebidas" },
+            "REFRIGERANTE SABOR COLA": { displayName: "Refrigerante sabor cola", category: "Bebidas" },
+            "REFRIGERANTE COCA COLA": { displayName: "Refrigerante coca cola", category: "Bebidas" },
+            "COCA COLA ZERO": { displayName: "Coca cola zero", category: "Bebidas" },
+            "CERVEJA IMPERIO": { displayName: "Cerveja império", category: "Bebidas" },
+            "CERVEJA HEINEKEN": { displayName: "Cerveja Heineken", category: "Bebidas" },
+            "CERVEJA STELLA": { displayName: "Cerveja Stella", category: "Bebidas" },
+            "RED BULL": { displayName: "Red bull", category: "Bebidas" },
+            "SMIRNOFF ICE": { displayName: "Smirnoff ice", category: "Bebidas" },
+            "KOVAK": { displayName: "Kovak", category: "Bebidas" },
+            "VINHO ESPUMANTE": { displayName: "Vinho Espumante", category: "Bebidas" },
+            "GIN": { displayName: "Gin", category: "Bebidas" },
+            "MONIN": { displayName: "Monin", category: "Bebidas" },
+            "XAROPE DE GUARANA": { displayName: "Xarope de guaraná", category: "Bebidas" },
+            "XAROPE DE CAJU": { displayName: "Xarope de caju", category: "Bebidas" },
+            "SUCO EM PO": { displayName: "Suco em pó", category: "Bebidas" },
+            "GATORADE": { displayName: "Gatorade", category: "Bebidas" },
+            "GUARACAMP": { displayName: "Guaracamp", category: "Bebidas" },
             
             // Congelados & Padaria
-            "MASSA DE PASTEL": { displayName: "Massa de Pastel", unit: "KG", category: "Congelados & Padaria" },
-            "HAMBURGUER": { displayName: "Hambúrguer", unit: "UN", category: "Congelados & Padaria" },
-            "BATATA FRITA": { displayName: "Batata frita", unit: "KG", category: "Congelados & Padaria" },
-            "PAO DE QUEIJO": { displayName: "Pão de queijo", unit: "KG", category: "Congelados & Padaria" },
-            "KIBE": { displayName: "Kibe", unit: "KG", category: "Congelados & Padaria" },
-            "BOLINHA DE QUEIJO": { displayName: "Bolinha de queijo", unit: "KG", category: "Congelados & Padaria" },
-            "SALGADINHO DE AIPIM": { displayName: "Salgadinho de aipim", unit: "KG", category: "Congelados & Padaria" },
-            "COXINHA": { displayName: "Coxinha", unit: "KG", category: "Congelados & Padaria" },
-            "RISOLE DE CAMARAO": { displayName: "Risole de camarão", unit: "KG", category: "Congelados & Padaria" },
+            "MASSA DE PASTEL": { displayName: "Massa de Pastel", category: "Congelados & Padaria" },
+            "HAMBURGUER": { displayName: "Hambúrguer", category: "Congelados & Padaria" },
+            "BATATA FRITA": { displayName: "Batata frita", category: "Congelados & Padaria" },
+            "PAO DE QUEIJO": { displayName: "Pão de queijo", category: "Congelados & Padaria" },
+            "KIBE": { displayName: "Kibe", category: "Congelados & Padaria" },
+            "BOLINHA DE QUEIJO": { displayName: "Bolinha de queijo", category: "Congelados & Padaria" },
+            "SALGADINHO DE AIPIM": { displayName: "Salgadinho de aipim", category: "Congelados & Padaria" },
+            "COXINHA": { displayName: "Coxinha", category: "Congelados & Padaria" },
+            "RISOLE DE CAMARAO": { displayName: "Risole de camarão", category: "Congelados & Padaria" },
             
             // Snacks
-            "MARIOLA": { displayName: "Mariola", unit: "UN", category: "Snacks" },
-            "AMENDOIM": { displayName: "Amendoim", unit: "KG", category: "Snacks" },
-            "ROSQUINHA MABEL": { displayName: "Rosquinha Mabel", unit: "PCTE", category: "Snacks" },
-            "PACOCA": { displayName: "Paçoca", unit: "UN", category: "Snacks" },
-            "GELEIA DE MOCOTO": { displayName: "Geleia de mocotó", unit: "UN", category: "Snacks" },
-            "SEQUILHOS": { displayName: "Sequilhos", unit: "PCTE", category: "Snacks" },
-            "PIT STOP": { displayName: "Pit Stop", unit: "PCTE", category: "Snacks" },
-            "ATIVPLUS": { displayName: "AtivPlus", unit: "UN", category: "Snacks" },
-            "BISCOITO TUCS": { displayName: "Biscoito Tucs", unit: "PCTE", category: "Snacks" },
-            "BISCOITO PASSATEMPO": { displayName: "Biscoito passatempo", unit: "PCTE", category: "Snacks" },
-            "BISCOITO AMANTEIGADO": { displayName: "Biscoito amanteigado", unit: "PCTE", category: "Snacks" },
-            "AMANTEIGADO GOIABINHA": { displayName: "Amanteigado Goiabinha", unit: "PCTE", category: "Snacks" },
-            "BARRINHA DE RACAO": { displayName: "Barrinha de ração", unit: "UN", category: "Snacks" },
-            "RAPADURA": { displayName: "Rapadura", unit: "UN", category: "Snacks" },
+            "MARIOLA": { displayName: "Mariola", category: "Snacks" },
+            "AMENDOIM": { displayName: "Amendoim", category: "Snacks" },
+            "ROSQUINHA MABEL": { displayName: "Rosquinha Mabel", category: "Snacks" },
+            "PACOCA": { displayName: "Paçoca", category: "Snacks" },
+            "GELEIA DE MOCOTO": { displayName: "Geleia de mocotó", category: "Snacks" },
+            "SEQUILHOS": { displayName: "Sequilhos", category: "Snacks" },
+            "PIT STOP": { displayName: "Pit Stop", category: "Snacks" },
+            "ATIVPLUS": { displayName: "AtivPlus", category: "Snacks" },
+            "BISCOITO TUCS": { displayName: "Biscoito Tucs", category: "Snacks" },
+            "BISCOITO PASSATEMPO": { displayName: "Biscoito passatempo", category: "Snacks" },
+            "BISCOITO AMANTEIGADO": { displayName: "Biscoito amanteigado", category: "Snacks" },
+            "AMANTEIGADO GOIABINHA": { displayName: "Amanteigado Goiabinha", category: "Snacks" },
+            "BARRINHA DE RACAO": { displayName: "Barrinha de ração", category: "Snacks" },
+            "RAPADURA": { displayName: "Rapadura", category: "Snacks" },
             
             // Outros
-            "GELO": { displayName: "Gelo", unit: "SACO", category: "Outros" }
+            "GELO": { displayName: "Gelo", category: "Outros" }
         };
 
         function getMaterialCategory(materialName) {
@@ -609,6 +613,28 @@
             return foundKey ? masterMaterialList[foundKey].category : "Outros";
         }
         // --- FIM: LÓGICA DE CATEGORIZAÇÃO E LISTA MESTRA ---
+
+        // --- NOVA FUNÇÃO PARA SUGESTÕES DE DESTINO ---
+        function populateDestinationSuggestions(departures) {
+            const destinationDatalist = document.getElementById('destination-suggestions');
+            if (!destinationDatalist) return;
+
+            // Extrai todos os destinos, converte para maiúsculo e remove nulos/vazios
+            const destinations = departures.map(d => d.destination ? d.destination.toUpperCase() : null)
+                                            .filter(Boolean); // Filtra nulos/vazios
+
+            // Cria um set de destinos únicos
+            const uniqueDestinations = [...new Set(destinations)];
+
+            // Popula o datalist
+            destinationDatalist.innerHTML = uniqueDestinations
+                .sort() // Ordena alfabeticamente
+                .map(d => `<option value="${d}"></option>`)
+                .join('');
+        }
+
+        // ATUALIZADO: Lista de sugestões de unidade
+        const unitSuggestions = ["UN", "KG", "L", "Saco", "Caixa", "Pç", "Pcte", "Fardo", "Balde", "Galao"];
 
         function renderData(selectedDate) {
             logTableBody.innerHTML = '';
@@ -819,14 +845,14 @@
                 if (!trimmedLine) continue;
                 
                 const parts = trimmedLine.split(/\s+/).filter(Boolean);
-                if (parts.length < 3) {
+                if (parts.length < 3) { // Precisa de pelo menos MATERIAL, UNIDADE, QUANTIDADE
                     errorCount++; errorLines.push(index + 1); continue; 
                 }
                 
-                // A lógica de extração mudou ligeiramente para ser mais robusta
+                // A lógica de extração mudou
                 const destination = parts.length > 3 ? parts.pop() : 'COZINHA';
                 let quantityStr = parts.pop();
-                parts.pop(); // Descarta a unidade do arquivo, pois usaremos a predefinida
+                const unit = parts.pop(); // ATUALIZADO: Lê a unidade do arquivo
                 const materialNameFromFile = parts.join(' ');
                 
                 // Validação contra a Lista Mestra
@@ -835,22 +861,21 @@
                 
                 if (!materialData) {
                     // Se o material não for encontrado na lista mestra
+                    console.warn(`Material não cadastrado ignorado: "${materialNameFromFile}" (Linha: ${index + 1})`);
                     errorCount++; errorLines.push(index + 1); continue;
                 }
-                
-                // Pega a unidade predefinida da lista mestra
-                const predefinedUnit = materialData.unit;
                 
                 if (quantityStr.includes('/')) quantityStr = quantityStr.split('/')[0].trim();
                 if (quantityStr.includes('½')) quantityStr = "0.5";
                 const quantity = parseFloat(quantityStr.replace(',', '.'));
                 
-                if (isNaN(quantity)) {
+                if (isNaN(quantity) || !unit) { // Valida a unidade lida
+                    console.warn(`Dados inválidos ignorados: "${quantityStr}", "${unit}" (Linha: ${index + 1})`);
                     errorCount++; errorLines.push(index + 1); continue;
                 }
                 
-                // Registra usando o nome de exibição e a unidade predefinida
-                const success = await registerDeparture(materialData.displayName, quantity, dateForBatch, destination, predefinedUnit);
+                // Registra usando o nome de exibição e a unidade lida do arquivo
+                const success = await registerDeparture(materialData.displayName, quantity, dateForBatch, destination, unit);
                 if (success) successCount++;
                 else { errorCount++; errorLines.push(index + 1); }
             }
@@ -909,24 +934,23 @@
                 materialInput.appendChild(option);
             });
         }
-
-        // Chamado quando o usuário seleciona um material no <select>
-        function handleMaterialChange(e) {
-            const selectedKey = e.target.value;
-            if (selectedKey && masterMaterialList[selectedKey]) {
-                // Encontra a unidade predefinida e atualiza o input de unidade
-                unitInput.value = masterMaterialList[selectedKey].unit;
-            } else {
-                // Limpa se o usuário selecionar "Selecione um material..."
-                unitInput.value = '';
+        
+        // ATUALIZADO: Preenche a datalist de sugestões de unidade
+        function fillUnitDatalist() {
+            const unitDatalist = document.getElementById('unit-suggestions');
+            if (unitDatalist) {
+                unitDatalist.innerHTML = unitSuggestions.map(u => `<option value="${u}"></option>`).join('');
             }
         }
-        
-        // Adiciona o listener ao <select> de materiais
-        materialInput.addEventListener('change', handleMaterialChange);
 
-        // Inicializa o seletor de materiais quando a janela carregar
-        window.onload = populateMaterialSelector;
+        // ATUALIZADO: A função handleMaterialChange não é mais necessária
+        // materialInput.addEventListener('change', handleMaterialChange);
+
+        // ATUALIZADO: window.onload agora chama as duas funções
+        window.onload = () => {
+            populateMaterialSelector();
+            fillUnitDatalist();
+        };
 
     </script>
 </head>
@@ -1046,8 +1070,9 @@
                             </div>
                             <div>
                                 <label for="unit_of_measure" class="block text-sm font-medium text-gray-700">3. Unidade de Medida</label>
-                                <!-- ATUALIZADO: Agora é readonly e preenchido automaticamente -->
-                                <input type="text" id="unit_of_measure" name="unit_of_measure" required placeholder="Selecione um material" class="mt-1 block w-full p-3 uppercase bg-gray-200" readonly>
+                                <!-- ATUALIZADO: Campo de texto livre novamente, com datalist -->
+                                <input type="text" id="unit_of_measure" name="unit_of_measure" list="unit-suggestions" required placeholder="Ex: KG, UN, L" class="mt-1 block w-full p-3 uppercase">
+                                <datalist id="unit-suggestions"></datalist>
                             </div>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1057,7 +1082,9 @@
                             </div>
                             <div>
                                 <label for="destination" class="block text-sm font-medium text-gray-700">5. Destino</label>
-                                <input type="text" id="destination" name="destination" required value="COZINHA" placeholder="Ex: Cozinha Principal" class="mt-1 block w-full p-3">
+                                <!-- ATUALIZADO: Agora tem uma lista de sugestões e é uppercase -->
+                                <input type="text" id="destination" name="destination" list="destination-suggestions" required value="COZINHA" placeholder="Ex: Cozinha Principal" class="mt-1 block w-full p-3 uppercase">
+                                <datalist id="destination-suggestions"></datalist>
                             </div>
                         </div>
                         <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-4">
@@ -1070,9 +1097,9 @@
                     <h3 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-3">Registro em Lote</h3>
                     <div class="bg-gray-50 p-4 border border-dashed border-gray-300 mb-4 text-sm rounded-lg mt-4">
                         <h4 class="font-semibold text-gray-800">Instruções:</h4>
-                        <!-- ATUALIZADO: Instrução de upload simplificada -->
-                        <p class="mt-2 text-gray-600">Crie um arquivo (.docx ou .txt) com as colunas na ordem: <code class="bg-gray-200 p-1 font-mono text-xs rounded">MATERIAL [UNIDADE - será ignorada] QUANTIDADE [DESTINO - opcional]</code></p>
-                        <p class="mt-2 text-gray-600"><strong>Importante:</strong> A Unidade de Medida será puxada automaticamente do cadastro. O Destino padrão é "COZINHA".</p>
+                        <!-- ATUALIZADO: Instrução de upload -->
+                        <p class="mt-2 text-gray-600">Crie um arquivo (.docx ou .txt) com as colunas na ordem: <code class="bg-gray-200 p-1 font-mono text-xs rounded">MATERIAL UNIDADE QUANTIDADE [DESTINO - opcional]</code></p>
+                        <p class="mt-2 text-gray-600"><strong>Importante:</strong> O MATERIAL deve ser idêntico ao do cadastro. O Destino padrão é "COZINHA".</p>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center pt-4">
                         <div>
@@ -1124,5 +1151,61 @@
             <!-- SEÇÃO SEMANAL (Oculta) -->
             <div id="semanal-container" class="hidden">
                 <button onclick="showDashboard()" class="secondary-button mb-6 font-semibold py-2 px-4 rounded-lg flex items-center text-sm"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>Voltar ao Painel</button>
-                <h2 class="text-2xl font-semibold text-gray-800 mb-6">Análise
+                <h2 class="text-2xl font-semibold text-gray-800 mb-6">Análise Semanal</h2>
+                <div class="p-6 md:p-8 content-container">
+                    <h3 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-3">Consumo Semanal</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 my-4">
+                        <div>
+                            <label for="week-month-filter" class="block text-sm font-medium text-gray-700">Selecionar Mês:</label>
+                            <select id="week-month-filter" class="mt-1 block w-full p-2"></select>
+                        </div>
+                        <div>
+                            <label for="week-number-filter" class="block text-sm font-medium text-gray-700">Selecionar Semana:</label>
+                            <select id="week-number-filter" class="mt-1 block w-full p-2">
+                                <option value="1">Semana 1 (Dias 1-7)</option>
+                                <option value="2">Semana 2 (Dias 8-14)</option>
+                                <option value="3">Semana 3 (Dias 15-21)</option>
+                                <option value="4">Semana 4 (Dia 22 em diante)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full">
+                            <thead><tr><th>Material</th><th>Unid.</th><th>Total Consumido</th></tr></thead>
+                            <tbody id="weekly-summary-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- SEÇÃO MENSAL (Oculta) -->
+            <div id="mensal-container" class="hidden">
+                 <button onclick="showDashboard()" class="secondary-button mb-6 font-semibold py-2 px-4 rounded-lg flex items-center text-sm"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>Voltar ao Painel</button>
+                 <h2 class="text-2xl font-semibold text-gray-800 mb-6">Análise Mensal</h2>
+                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                       <div class="lg:col-span-2 p-6 content-container">
+                           <h3 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-3">Consumo Mensal</h3>
+                           <div class="my-4">
+                               <label for="month-filter" class="block text-sm font-medium text-gray-700">Selecionar Mês:</label>
+                               <input type="month" id="month-filter" class="mt-1 block w-full p-2">
+                           </div>
+                           <div class="overflow-x-auto">
+                               <table class="min-w-full">
+                                   <thead><tr><th>Material</th><th>Unid.</th><th>Total Consumido</th></tr></thead>
+                                   <tbody id="monthly-summary-table-body"></tbody>
+                               </table>
+                           </div>
+                       </div>
+                       <div class="p-6 content-container bg-blue-50 border-blue-200 flex flex-col justify-center items-center">
+                           <h3 class="text-xl font-semibold text-blue-800 mb-4 text-center">Destaques do Mês</h3>
+                           <div id="top-month-output" class="text-center">
+                               <!-- Conteúdo gerado via JS -->
+                           </div>
+                       </div>
+                 </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
 
